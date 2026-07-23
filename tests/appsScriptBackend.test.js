@@ -9,6 +9,7 @@ const sourceFiles = [
   'Repository.gs',
   'Clients.gs',
   'Performances.gs',
+  'LegacyClientMapping.gs',
   'LegacyPerformanceImport.gs',
   'LegacyBridge.gs',
   'Main.gs',
@@ -43,7 +44,9 @@ this.__backendTest = {
   normalizeLegacyTime_,
   legacyPhaseForSheetName_,
   parseLegacyActivityCode_,
-  buildLegacyPerformanceStableId_
+  buildLegacyPerformanceStableId_,
+  buildLegacyIdentityKey_,
+  resolveLegacyIdentityCandidate_
 };`, context);
 
 const backend = context.__backendTest;
@@ -147,6 +150,73 @@ test('historický import normalizuje čas a vytváří stabilní ID slotu', () =
   const second = backend.buildLegacyPerformanceStableId_('file-1', 'Jednání se zájemcem', 'b4');
   assert.equal(first, second);
   assert.match(first, /^LEGACY-[a-f0-9]{40}$/);
+});
+
+test('historický import páruje klienta podle identity bez ohledu na starý projekt', () => {
+  const candidate = {
+    projectId: 'MAS',
+    identityKey: backend.buildLegacyIdentityKey_('Renáta', 'Durčáková', '1977-04-01'),
+    birthDateKey: '1977-04-01',
+    clientIndex: { client_id: 'mas-18', client_number: 18, project_id: 'MAS' }
+  };
+  const result = backend.resolveLegacyIdentityCandidate_({
+    firstName: 'Renáta',
+    lastName: 'Durčáková',
+    birthDate: '1977-04-01',
+    sourceProjectId: 'CECH'
+  }, [candidate]);
+  assert.equal(result.status, 'AUTO_IDENTITY');
+  assert.equal(result.clientIndex.client_id, 'mas-18');
+});
+
+test('historický import použije unikátní datum narození jako kontrolovaný fallback', () => {
+  const candidate = {
+    projectId: 'CECH',
+    firstName: 'Zdeněk',
+    identityKey: backend.buildLegacyIdentityKey_('Zdeněk', 'Bílý', '1996-03-18'),
+    birthDateKey: '1996-03-18',
+    clientIndex: { client_id: 'cech-23', client_number: 23, project_id: 'CECH' }
+  };
+  const result = backend.resolveLegacyIdentityCandidate_({
+    firstName: 'Zdeněk',
+    lastName: 'Bíý',
+    birthDate: '1996-03-18'
+  }, [candidate]);
+  assert.equal(result.status, 'AUTO_BIRTH_DATE');
+  assert.equal(result.clientIndex.client_id, 'cech-23');
+});
+
+test('historický import vyloučí identitu patřící do projektu PRAC', () => {
+  const candidate = {
+    projectId: 'PRAC',
+    identityKey: backend.buildLegacyIdentityKey_('Nikol', 'Ligocká', '2002-08-31'),
+    birthDateKey: '2002-08-31',
+    clientIndex: null
+  };
+  const result = backend.resolveLegacyIdentityCandidate_({
+    firstName: 'Nikol',
+    lastName: 'Ligocká',
+    birthDate: '2002-08-31'
+  }, [candidate]);
+  assert.equal(result.status, 'EXCLUDED_PRAC');
+  assert.equal(result.clientIndex, undefined);
+});
+
+test('historický import nepřiřadí klienta při nejednoznačném datu narození', () => {
+  const sourceIdentity = {
+    firstName: 'Nejasné',
+    lastName: 'Jméno',
+    birthDate: '1969-01-01'
+  };
+  const candidates = ['c1', 'c2'].map((clientId) => ({
+    projectId: 'CECH',
+    identityKey: backend.buildLegacyIdentityKey_('Jiný', clientId, '1969-01-01'),
+    birthDateKey: '1969-01-01',
+    clientIndex: { client_id: clientId, project_id: 'CECH' }
+  }));
+  const result = backend.resolveLegacyIdentityCandidate_(sourceIdentity, candidates);
+  assert.equal(result.status, 'AMBIGUOUS_BIRTH_DATE');
+  assert.equal(result.candidate, null);
 });
 
 test('Apps Script zdroje neobsahují pevně vložené Google ID ani token', () => {

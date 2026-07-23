@@ -86,7 +86,7 @@ function doPost(e) {
       context = assertProjectAccess_(payload.actor_id, projectId, ['GARANT', 'ADMIN']);
       return jsonResponse_({
         ok: true,
-        import: syncLegacyPerformances_(context, {
+        import: runLegacyPerformanceSyncWithLock_(context, {
           offset: payload.offset,
           batchSize: payload.batch_size,
           dryRun: payload.dry_run === true,

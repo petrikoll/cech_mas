@@ -300,6 +300,40 @@ function upsertLegacyPerformances_(performances, existingRows) {
   return { created: created, updated: updated, unchanged: unchanged };
 }
 
+function deactivateLegacyPerformancesForSource_(existingRows, fileId, activeIds, status) {
+  const allowedIds = activeIds || new Set();
+  let deactivated = 0;
+  (existingRows || []).forEach((row) => {
+    if (String(row.source_system || '').toUpperCase() !== 'LEGACY_XLSM') return;
+    if (String(row.legacy_source_file_id || '') !== String(fileId || '')) return;
+    if (String(row.status || '').toUpperCase() !== 'ACTIVE') return;
+    if (allowedIds.has(String(row.performance_id || ''))) return;
+    const updated = Object.assign({}, row, {
+      status: String(status || 'STALE_SOURCE').toUpperCase(),
+      updated_at: nowIso_(),
+      updated_by: 'LEGACY_RECONCILIATION'
+    });
+    delete updated.__rowNumber;
+    updateDataObjectAtRow_(DATA_SHEETS.performances, row.__rowNumber, updated);
+    Object.assign(row, updated);
+    deactivated += 1;
+  });
+  return deactivated;
+}
+
+function legacySourceMappingIsCurrent_(existingRows, fileId, clientIndex, cachedCount) {
+  const activeRows = (existingRows || []).filter((row) =>
+    String(row.source_system || '').toUpperCase() === 'LEGACY_XLSM' &&
+    String(row.legacy_source_file_id || '') === String(fileId || '') &&
+    String(row.status || '').toUpperCase() === 'ACTIVE'
+  );
+  if (activeRows.length !== Number(cachedCount || 0)) return false;
+  return activeRows.every((row) =>
+    String(row.client_id || '') === String(clientIndex.client_id || '') &&
+    normalizeProjectId_(row.project_id) === normalizeProjectId_(clientIndex.project_id)
+  );
+}
+
 function syncLegacyPerformances_(context, options) {
   const settings = options || {};
   const offset = Math.max(0, Number(settings.offset) || 0);
@@ -309,11 +343,18 @@ function syncLegacyPerformances_(context, options) {
   const projectFilter = settings.projectId ? requireProjectId_(settings.projectId) : '';
   const sources = listLegacyClientWorkbookFiles_();
   const batch = sources.slice(offset, offset + batchSize);
-  const clientRows = readDataObjects_(DATA_SHEETS.clientIndex);
-  const clientsByNumber = {};
-  clientRows.forEach((row) => {
-    clientsByNumber[String(Number(row.client_number))] = row;
+  const resolutions = resolveLegacyPerformanceSources_(sources);
+  const resolutionByFileId = {};
+  const resolutionByFileName = {};
+  resolutions.forEach((resolution) => {
+    if (resolution.fileId) resolutionByFileId[resolution.fileId] = resolution;
+    if (resolution.fileName) {
+      resolutionByFileName[resolution.fileName.toLowerCase()] = resolution;
+    }
   });
+  const mapSync = dryRun
+    ? { created: 0, updated: 0, unchanged: resolutions.length }
+    : syncLegacyClientMap_(resolutions);
   const cacheRows = readDataObjects_(DATA_SHEETS.legacyImportCache);
   const cacheByFileId = {};
   cacheRows.forEach((row) => {
@@ -335,29 +376,78 @@ function syncLegacyPerformances_(context, options) {
     unchanged: 0,
     extractedPerformances: 0,
     incompletePerformances: 0,
+    deactivatedPerformances: 0,
+    excludedPracFiles: 0,
+    unmappedFiles: 0,
+    mappingStatusCounts: {},
+    mapSync: mapSync,
     errors: []
   };
 
   batch.forEach((source) => {
-    const clientIndex = clientsByNumber[String(source.clientNumber)];
     if (!source.file) {
       summary.missingFiles += 1;
       return;
     }
-    if (!clientIndex || (projectFilter && clientIndex.project_id !== projectFilter)) {
-      if (!clientIndex) summary.unmappedClients += 1;
-      return;
-    }
 
     const fileId = source.file.getId();
+    const fileName = source.file.getName();
+    const resolution = resolutionByFileId[fileId] ||
+      resolutionByFileName[fileName.toLowerCase()] ||
+      { status: 'UNMAPPED_IDENTITY', clientIndex: null };
+    const mappingStatus = String(resolution.status || 'UNMAPPED_IDENTITY').toUpperCase();
+    summary.mappingStatusCounts[mappingStatus] =
+      (summary.mappingStatusCounts[mappingStatus] || 0) + 1;
+    const clientIndex = resolution.clientIndex || null;
+
+    if (!clientIndex) {
+      if (mappingStatus === 'EXCLUDED_PRAC') summary.excludedPracFiles += 1;
+      else {
+        summary.unmappedClients += 1;
+        summary.unmappedFiles += 1;
+      }
+      if (!dryRun) {
+        summary.deactivatedPerformances += deactivateLegacyPerformancesForSource_(
+          existingPerformances,
+          fileId,
+          new Set(),
+          mappingStatus
+        );
+        upsertDataObject_(
+          DATA_SHEETS.legacyImportCache,
+          'legacy_file_id',
+          fileId,
+          {
+            legacy_file_id: fileId,
+            legacy_file_name: fileName,
+            client_number: source.clientNumber,
+            source_modified_at: source.file.getLastUpdated().toISOString(),
+            last_imported_at: nowIso_(),
+            status: mappingStatus,
+            performance_count: 0,
+            error: ''
+          }
+        );
+      }
+      return;
+    }
+    if (projectFilter && clientIndex.project_id !== projectFilter) return;
+
     const modifiedAt = source.file.getLastUpdated().toISOString();
     const cache = cacheByFileId[fileId];
+    const mappingIsCurrent = legacySourceMappingIsCurrent_(
+      existingPerformances,
+      fileId,
+      clientIndex,
+      cache ? cache.performance_count : 0
+    );
     if (
       !dryRun &&
       !force &&
       cache &&
       ['OK', 'PARTIAL'].includes(String(cache.status || '').toUpperCase()) &&
-      String(cache.source_modified_at || '') === modifiedAt
+      String(cache.source_modified_at || '') === modifiedAt &&
+      mappingIsCurrent
     ) {
       summary.skippedUnchangedFiles += 1;
       return;
@@ -374,6 +464,12 @@ function syncLegacyPerformances_(context, options) {
         summary.created += result.created;
         summary.updated += result.updated;
         summary.unchanged += result.unchanged;
+        summary.deactivatedPerformances += deactivateLegacyPerformancesForSource_(
+          existingPerformances,
+          fileId,
+          new Set(performances.map((performance) => performance.performance_id)),
+          'STALE_SOURCE'
+        );
         upsertDataObject_(
           DATA_SHEETS.legacyImportCache,
           'legacy_file_id',
@@ -443,29 +539,52 @@ function syncLegacyPerformances_(context, options) {
 }
 
 function runLegacyPerformanceImportBatch() {
-  const properties = PropertiesService.getScriptProperties();
-  const offset = Number(properties.getProperty(LEGACY_IMPORT_OFFSET_PROPERTY)) || 0;
-  const context = {
-    actorId: 'SYSTEM',
-    displayName: 'Automatický import',
-    role: 'SYSTEM',
-    projectId: ''
-  };
-  const result = syncLegacyPerformances_(context, {
-    offset: offset,
-    batchSize: LEGACY_IMPORT_BATCH_SIZE
-  });
-  properties.setProperty(
-    LEGACY_IMPORT_OFFSET_PROPERTY,
-    String(result.nextOffset || 0)
-  );
-  return result;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const offset = Number(properties.getProperty(LEGACY_IMPORT_OFFSET_PROPERTY)) || 0;
+    const context = {
+      actorId: 'SYSTEM',
+      displayName: 'Automatický import',
+      role: 'SYSTEM',
+      projectId: ''
+    };
+    const result = syncLegacyPerformances_(context, {
+      offset: offset,
+      batchSize: LEGACY_IMPORT_BATCH_SIZE
+    });
+    properties.setProperty(
+      LEGACY_IMPORT_OFFSET_PROPERTY,
+      String(result.nextOffset || 0)
+    );
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function runLegacyPerformanceSyncWithLock_(context, options) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    return syncLegacyPerformances_(context, options);
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function auditLegacyPerformanceImport() {
-  const performances = readDataObjects_(DATA_SHEETS.performances)
+  const allLegacyPerformances = readDataObjects_(DATA_SHEETS.performances)
     .filter((row) => String(row.source_system || '').toUpperCase() === 'LEGACY_XLSM');
+  const performances = allLegacyPerformances
+    .filter((row) => String(row.status || '').toUpperCase() === 'ACTIVE');
   const cacheRows = readDataObjects_(DATA_SHEETS.legacyImportCache);
+  const mapRows = readDataObjects_(DATA_SHEETS.legacyMap);
+  const mapByFileId = mapRows.reduce((map, row) => {
+    map[String(row.legacy_file_id || '')] = row;
+    return map;
+  }, {});
   const summary = {
     offset: Number(
       PropertiesService.getScriptProperties().getProperty(LEGACY_IMPORT_OFFSET_PROPERTY)
@@ -483,6 +602,48 @@ function auditLegacyPerformanceImport() {
       counts[projectId] = (counts[projectId] || 0) + 1;
       return counts;
     }, {}),
+    phaseMinutes: performances.reduce((counts, row) => {
+      const phase = String(row.phase_code || '').toUpperCase();
+      counts[phase] = (counts[phase] || 0) + (Number(row.duration_minutes) || 0);
+      return counts;
+    }, {}),
+    projectMinutes: performances.reduce((counts, row) => {
+      const projectId = String(row.project_id || '').toUpperCase();
+      counts[projectId] = (counts[projectId] || 0) + (Number(row.duration_minutes) || 0);
+      return counts;
+    }, {}),
+    activityCounts: performances.reduce((counts, row) => {
+      let codes = [];
+      try {
+        codes = normalizeActivityCodes_(row.activity_codes_json || []);
+      } catch (error) {
+        codes = [];
+      }
+      codes.forEach((code) => {
+        counts[code] = (counts[code] || 0) + 1;
+      });
+      return counts;
+    }, {}),
+    activeSourceFileCount: new Set(
+      performances.map((row) => String(row.legacy_source_file_id || '')).filter(Boolean)
+    ).size,
+    activeClientCount: new Set(
+      performances.map((row) => String(row.client_id || '')).filter(Boolean)
+    ).size,
+    mappingMismatchCount: performances.filter((row) => {
+      const mapping = mapByFileId[String(row.legacy_source_file_id || '')];
+      if (!mapping) return true;
+      const mappingStatus = String(mapping.mapping_status || '').toUpperCase();
+      if (mappingStatus === 'EXCLUDED_PRAC' ||
+          mappingStatus === 'EXCLUDED_OTHER_PROJECT') return true;
+      return String(row.client_id || '') !== String(mapping.client_id || '') ||
+        normalizeProjectId_(row.project_id) !== normalizeProjectId_(mapping.project_id);
+    }).length,
+    performanceStatusCounts: allLegacyPerformances.reduce((counts, row) => {
+      const status = String(row.status || '').toUpperCase() || 'EMPTY';
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {}),
     cacheStatusCounts: cacheRows.reduce((counts, row) => {
       const status = String(row.status || '').toUpperCase() || 'EMPTY';
       counts[status] = (counts[status] || 0) + 1;
@@ -491,7 +652,12 @@ function auditLegacyPerformanceImport() {
     cachePerformanceCount: cacheRows.reduce(
       (sum, row) => sum + (Number(row.performance_count) || 0),
       0
-    )
+    ),
+    mappingStatusCounts: mapRows.reduce((counts, row) => {
+      const status = String(row.mapping_status || '').toUpperCase() || 'EMPTY';
+      counts[status] = (counts[status] || 0) + 1;
+      return counts;
+    }, {})
   };
   console.log(JSON.stringify(summary));
   return summary;

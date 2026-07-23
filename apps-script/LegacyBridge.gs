@@ -116,9 +116,14 @@ function resolveLegacyClient_(legacyRow, clientMaps, explicitMappings) {
   const explicit = explicitMappings.byFileId[fileId] ||
     explicitMappings.byFileName[fileName.toLowerCase()];
   if (explicit) {
+    const explicitStatus = String(explicit.mapping_status || '').toUpperCase();
+    if (explicitStatus === 'EXCLUDED_PRAC' ||
+        explicitStatus === 'EXCLUDED_OTHER_PROJECT') {
+      return { client: null, status: explicitStatus };
+    }
     const client = clientMaps.byId[String(explicit.client_id || '')];
     return client
-      ? { client: client, status: 'EXPLICIT' }
+      ? { client: client, status: explicitStatus || 'EXPLICIT' }
       : { client: null, status: 'BROKEN_EXPLICIT_MAPPING' };
   }
 
@@ -137,6 +142,12 @@ function resolveLegacyClient_(legacyRow, clientMaps, explicitMappings) {
 function mergeLegacyAndAppRow_(legacyRow, client, aggregate, mappingStatus) {
   const row = legacyRow.slice(0, 25);
   while (row.length < 25) row.push('');
+  if (client) {
+    row[2] = client.project_id;
+    row[7] = client.jmeno;
+    row[8] = client.prijmeni;
+    row[9] = client.datum_narozeni;
+  }
   if (aggregate) {
     const legacyA = durationToMinutes_(row[3]);
     const legacyB = durationToMinutes_(row[4]);
@@ -202,10 +213,14 @@ function rebuildLegacyBridge_(context, projectId) {
   const mappingSummary = {};
 
   legacyValues.slice(1).forEach((legacyRow) => {
-    const rowProject = normalizeProjectId_(legacyRow[2]);
-    if (!rowProject || (filterProjectId && rowProject !== filterProjectId)) return;
     const resolved = resolveLegacyClient_(legacyRow, clientMaps, explicitMappings);
     const client = resolved.client;
+    if (resolved.status === 'EXCLUDED_PRAC' ||
+        resolved.status === 'EXCLUDED_OTHER_PROJECT') return;
+    const rowProject = client
+      ? normalizeProjectId_(client.project_id)
+      : normalizeProjectId_(legacyRow[2]);
+    if (!rowProject || (filterProjectId && rowProject !== filterProjectId)) return;
     const aggregate = client ? aggregates[client.klient_id] : null;
     if (client) usedClientIds[client.klient_id] = true;
     output.push(mergeLegacyAndAppRow_(legacyRow, client, aggregate, resolved.status));
