@@ -7420,7 +7420,7 @@ ${rawPlanOutput}` }] }],
               ka02AiDocumentKeys={KA02_AI_DOCUMENT_KEYS}
               computedIndicators={computedIndicators}
               currentWorker={currentWorker}
-              isSaving={saving}
+              isSaving={isSaving}
             />
           </React.Suspense>
         )}
