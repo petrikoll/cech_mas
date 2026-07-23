@@ -86,6 +86,7 @@ import { parseAiJson, redactClientIdentifiers, sanitizeAiInput, validatePlanOutp
 import { buildClientCaseAiPrompt, filterClientCaseAiRecords } from '../lib/clientCaseSummary.js';
 import { buildHorizontalPrinciplesAiPrompt, buildHorizontalPrinciplesFallbackText, buildZorTexts } from '../lib/zorSummary.js';
 import AiDocumentPanel from './AiDocumentPanel.jsx';
+import Ka02View from './Ka02View.jsx';
 import ProjectSwitcher from '../components/ProjectSwitcher.jsx';
 import { useProject } from '../context/ProjectContext.jsx';
 import sfLogoImage from '../assets/eu-spolufinancovano-logo.png';
@@ -125,7 +126,6 @@ import {
 } from '../lib/projectUtils.js';
 
 const Ka01View = React.lazy(() => import('./Ka01View.jsx'));
-const Ka02View = React.lazy(() => import('./Ka02View.jsx'));
 const Ka2CaseManagementView = React.lazy(() => import('./Ka2CaseManagementView.jsx'));
 const ReportingView = React.lazy(() => import('./ReportingView.jsx'));
 
