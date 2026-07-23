@@ -86,7 +86,7 @@ function mapSheetRowToClient(row, index) {
       mesto: row.mesto || row.obec_cast || '',
       psc: row.psc || '',
       spadoveMesto: row.spadove_mesto || row.mesto || '',
-      email: row.email || '',
+      email: row.email || row.email_datova_schranka || '',
       datovaSchranka: row.datova_schranka || '',
       telefon: row.telefon || '',
       pohlavi: row.pohlavi || '',

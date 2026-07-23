@@ -14,4 +14,8 @@ test('katalog KA1 obsahuje tři fáze a čtrnáct činností', () => {
   assert.equal(KA1_PHASES.length, 3);
   assert.equal(KA1_ACTIVITIES.length, 14);
   assert.equal(new Set(KA1_ACTIVITIES.map((activity) => activity.code)).size, 14);
+  assert.deepEqual(
+    KA1_ACTIVITIES.map((activity) => activity.code),
+    ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']
+  );
 });

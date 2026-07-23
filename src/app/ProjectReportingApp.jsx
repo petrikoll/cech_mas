@@ -1476,38 +1476,45 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
   });
 
   performances.filter(statusOk).forEach((row) => {
-    const id = asSheetText(row.vykon_id);
-    const clientId = asSheetText(row.klient_id);
+    const id = asSheetText(row.vykon_id || row.performance_id);
+    const clientId = asSheetText(row.klient_id || row.client_id);
     if (!id || !clientId) return;
     const specific = parseSheetJson(row.specificka_pole_json, {});
     const supportSpecific = { ...(specific.supportSpecific || {}), ...mapSheetColumnsToKA1SupportSpecific(row) };
+    const activityCodes = parseSheetJson(row.activity_codes_json, []);
+    const durationMinutes = Number(row.duration_minutes);
     records.push({
       id,
       remoteSource: 'google-sheet',
       entityType: 'consultations',
       ka: 'KA1',
-      title: asSheetText(row.typ_podpory) || 'Z?pis podpory - ' + clientName(clientId),
-      activityDate: asSheetDate(row.datum || row.created_at),
-      worker: asSheetWorker(row.pracovnik),
+      title: asSheetText(row.typ_podpory) ||
+        (Array.isArray(activityCodes) && activityCodes.length ? activityCodes.join(', ') : 'Zápis podpory') +
+        ' - ' + clientName(clientId),
+      activityDate: asSheetDate(row.datum || row.date || row.created_at),
+      worker: asSheetWorker(row.pracovnik || row.worker_name || row.worker_id),
       clientId,
       clientIds: [clientId],
       clientName: clientName(clientId),
-      documentText: asSheetText(row.dokument_text),
+      documentText: asSheetText(row.dokument_text || row.case_note),
       documentUrl: asSheetText(row.document_url),
       linkedPlanGoalId: asSheetText(row.cil_ip_id),
       linkedPlanGoalLabel: asSheetText(row.cil_ip),
       payload: {
         ...specific,
-        startTime: asSheetText(row.cas_od),
-        endTime: asSheetText(row.cas_do),
-        durationMinutes: hoursToMinutes(row.pocet_hodin),
+        startTime: asSheetText(row.cas_od || row.start_time),
+        endTime: asSheetText(row.cas_do || row.end_time),
+        durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0
+          ? durationMinutes
+          : hoursToMinutes(row.pocet_hodin),
         consultationType: asSheetText(row.typ_podpory),
-        supportArea: asSheetText(row.tema_podpory),
+        supportArea: asSheetText(row.tema_podpory || row.phase_code),
+        activityCodes,
         supportSpecific,
-        topics: asSheetText(row.popis || row.tema_podpory),
+        topics: asSheetText(row.popis || row.case_note || row.tema_podpory),
         outcome: asSheetText(row.vysledek),
         nextSteps: asSheetText(row.dalsi_krok),
-        place: asSheetText(row.forma_poskytovani),
+        place: asSheetText(row.forma_poskytovani || row.meeting_form || row.place),
         linkedPlanGoalId: asSheetText(row.cil_ip_id),
         linkedPlanGoalLabel: asSheetText(row.cil_ip),
         caseManagementMode: false
@@ -1958,8 +1965,15 @@ const createKa01ActorDraft = () => ({
 
 const createKa02Draft = () => ({
   date: todayIso(),
-  worker: 'Pracovní poradce',
+  worker: 'Sociální pracovník',
   selectedClientId: '',
+  phaseCode: 'A',
+  activityCodes: [],
+  meetingForm: 'Osobně',
+  place: '',
+  startTime: '',
+  endTime: '',
+  caseNote: '',
   planVersion: '1',
   currentSituation: '',
   goals: '',
@@ -2064,6 +2078,7 @@ const KA01_ACTOR_DRAFT_CONTENT_FIELDS = [
 ];
 
 const KA02_DRAFT_CONTENT_FIELDS = [
+  'activityCodes', 'place', 'startTime', 'endTime', 'caseNote',
   'currentSituation', 'goals', 'barriers', 'plannedSteps', 'durationMinutes', 'topics', 'outcome',
   'nextSteps', 'debtSummary', 'debtCauses', 'solutionPlan', 'educationTopic', 'therapyThemes',
   'therapyMentalState', 'therapyRecommendations', 'targetJob', 'cvDurationMinutes', 'experience',
@@ -2242,8 +2257,15 @@ function App() {
 
   const [ka02Draft, setKa02Draft] = useState({
     date: todayIso(),
-    worker: 'Pracovní poradce',
+    worker: 'Sociální pracovník',
     selectedClientId: '',
+    phaseCode: 'A',
+    activityCodes: [],
+    meetingForm: 'Osobně',
+    place: '',
+    startTime: '',
+    endTime: '',
+    caseNote: '',
     planVersion: '1',
     currentSituation: '',
     goals: '',
@@ -2384,6 +2406,7 @@ function App() {
         const clientsUrl = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
         clientsUrl.searchParams.set('action', 'listClients');
         clientsUrl.searchParams.set('project_id', activeProjectId);
+        clientsUrl.searchParams.set('actor_id', globalWorker || WORKERS[0]);
         const response = await fetch(clientsUrl.toString());
         if (!response.ok) {
           throw new Error('Nepodařilo se načíst klientský registr.');
@@ -2444,7 +2467,7 @@ function App() {
     };
 
     fetchClients();
-  }, [activeProjectId]);
+  }, [activeProjectId, globalWorker]);
 
   const projectClients = useMemo(
     () => clients.filter((client) => client.projectId === activeProjectId),
@@ -2468,6 +2491,7 @@ function App() {
       const url = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
       url.searchParams.set('action', action);
       url.searchParams.set('project_id', activeProjectId);
+      url.searchParams.set('actor_id', globalWorker || WORKERS[0]);
       const response = await fetch(url.toString());
       if (!response.ok) throw new Error('Google Sheet akce ' + action + ' selhala.');
       const json = await response.json();
@@ -2535,17 +2559,11 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [clients, clientIndex, activeProjectId]);
+  }, [clients, clientIndex, activeProjectId, globalWorker]);
 
   const currentWorker = globalWorker || WORKERS[0];
   const canSeeAllClients = isGarantWorker(currentWorker);
-  const accessibleClients = useMemo(() => {
-    if (canSeeAllClients) return projectClients;
-    return projectClients.filter((client) =>
-      client.keyWorker === currentWorker ||
-      (isCaseManagerWorker(currentWorker) && hasCaseManagementNeed(client))
-    );
-  }, [projectClients, currentWorker, canSeeAllClients]);
+  const accessibleClients = useMemo(() => projectClients, [projectClients]);
 
   const clientSelectionPool = useMemo(() => {
     if (mainView === 'clients' && showAllClients) return projectClients;
@@ -3571,6 +3589,7 @@ function App() {
     const scopedPayload = {
       ...payload,
       project_id: payload.project_id || activeProjectId,
+      actor_id: payload.actor_id || currentWorker,
       source_system: payload.source_system || 'NEW_APP'
     };
     const response = await fetch(GOOGLE_SHEET_MACRO_URL, {
@@ -3590,6 +3609,7 @@ function App() {
       const url = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
       url.searchParams.set('action', 'getBackupStatus');
       url.searchParams.set('project_id', activeProjectId);
+      url.searchParams.set('actor_id', currentWorker);
       const response = await fetch(url.toString(), { cache: 'no-store' });
       if (!response.ok) throw new Error('Načtení stavu zálohy selhalo.');
       const result = await response.json().catch(() => ({}));
@@ -3653,6 +3673,7 @@ function App() {
       const url = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
       url.searchParams.set('action', 'listStatistics');
       url.searchParams.set('project_id', activeProjectId);
+      url.searchParams.set('actor_id', currentWorker);
       const response = await fetch(url.toString(), { cache: 'no-store' });
       if (!response.ok) throw new Error('Obnovení statistik selhalo.');
       const result = await response.json().catch(() => ({}));
@@ -3820,8 +3841,10 @@ function App() {
           datum: record.activityDate || '',
           cas_od: payload.startTime || payload.ka02StartTime || '',
           cas_do: payload.endTime || payload.ka02EndTime || '',
+          duration_minutes: payload.durationMinutes || '',
           pocet_hodin: payload.durationMinutes ? Math.round((Number(payload.durationMinutes) / 60) * 100) / 100 : '',
           pracovnik: record.worker || '',
+          activity_codes_json: JSON.stringify(payload.activityCodes || []),
           typ_podpory: payload.consultationType || 'koordinace podpory klienta',
           tema_podpory: payload.supportArea || '',
           forma_poskytovani: 'ambulantn\u00ed',
@@ -3856,10 +3879,13 @@ function App() {
           tema_podpory: payload.supportArea || payload.topics || payload.debtStage || payload.targetJob || payload.position || '',
           specificka_pole_json: JSON.stringify(payload || {}),
           ...mapKA1SupportSpecificToSheetColumns(payload.supportSpecific || {}),
-          forma_poskytovani: payload.place || '',
+          forma_poskytovani: payload.meetingForm || payload.place || '',
+          meeting_form: payload.meetingForm || '',
+          misto: payload.place || '',
           cil_ip_id: payload.linkedPlanGoalId || '',
           cil_ip: payload.linkedPlanGoalLabel || '',
-          popis: payload.topics || payload.debtSummary || payload.themes || payload.feedback || payload.experience || '',
+          popis: payload.caseNote || payload.topics || payload.debtSummary || payload.themes || payload.feedback || payload.experience || '',
+          case_note: payload.caseNote || payload.topics || '',
           vysledek: payload.outcome || payload.solutionPlan || payload.recommendations || payload.developmentAreas || '',
           dalsi_krok: payload.nextSteps || payload.plannedSteps || '',
           dokument_text: record.documentText || '',
@@ -3867,7 +3893,10 @@ function App() {
         }
       });
       await refreshStatisticsRows();
-      return { ...record, id: result?.performance?.vykon_id || record.id };
+      return {
+        ...record,
+        id: result?.performance?.vykon_id || result?.performance?.performance_id || record.id
+      };
     }
 
     return record;
@@ -5062,6 +5091,7 @@ ${rawOutput}` }] }],
       const url = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
       url.searchParams.set('action', 'listNetworkMeetings');
       url.searchParams.set('project_id', activeProjectId);
+      url.searchParams.set('actor_id', currentWorker);
       const response = await fetch(url.toString());
       const json = await response.json();
       if (!response.ok || json.ok === false) throw new Error(json.error || 'Na?ten? sch?zek selhalo.');
@@ -6201,6 +6231,7 @@ ${rawPlanOutput}` }] }],
         const url = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
         url.searchParams.set('action', 'listNetworkMeetings');
         url.searchParams.set('project_id', activeProjectId);
+        url.searchParams.set('actor_id', currentWorker);
         const response = await fetch(url.toString());
         const json = await response.json();
         if (!response.ok || json.ok === false) throw new Error(json.error || 'Na\u010dten\u00ed aktivit selhalo.');
@@ -7388,6 +7419,8 @@ ${rawPlanOutput}` }] }],
               renderAiDocumentPanel={renderAiDocumentPanel}
               ka02AiDocumentKeys={KA02_AI_DOCUMENT_KEYS}
               computedIndicators={computedIndicators}
+              currentWorker={currentWorker}
+              isSaving={saving}
             />
           </React.Suspense>
         )}

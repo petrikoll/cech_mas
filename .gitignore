@@ -29,3 +29,7 @@ src/assets/moravsky-beroun-erb.jpg
 .vscode/
 Thumbs.db
 .DS_Store
+
+# Lokální Apps Script nastavení a tajné hodnoty.
+.clasp.json
+apps-script/script-properties.json

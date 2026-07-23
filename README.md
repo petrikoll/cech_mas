@@ -59,3 +59,16 @@ spojuje je pro dashboard a kontroluje duplicity.
 
 Podrobný návrh je v
 [`docs/ARCHITEKTURA_A_MIGRACE.md`](docs/ARCHITEKTURA_A_MIGRACE.md).
+
+## Apps Script backend
+
+Přípravný dvouprojektový backend je v adresáři
+[`apps-script`](apps-script/README.md). Obsahuje:
+
+- projektově omezené čtení a zápis klientů,
+- atomické číslování klientů,
+- normalizované výkony KA1 s kódy `A1–C7`,
+- uživatelská oprávnění, audit a ochranu proti dvojímu odeslání,
+- bridge pro souběžný provoz starých XLSM a nové aplikace.
+
+Backend zatím není nasazený a živé Google Sheety nebyly upraveny.
