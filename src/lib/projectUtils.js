@@ -984,6 +984,8 @@ function translateFieldLabel(key) {
     consultationType: 'Typ podpory',
     supportArea: 'Oblast podpory',
     supportSpecific: 'Specifick\u00e9 \u00fadaje',
+    activityCodes: 'Činnosti',
+    meetingForm: 'Forma jednání',
     topics: 'Témata',
     outcome: 'Vyhodnocení',
     nextSteps: 'Další kroky',
@@ -1378,7 +1380,10 @@ const EXPORT_HIDDEN_FIELDS = new Set([
   'updatedAt',
   'structuredPersonalDevelopmentPlan',
   'acceptedPlanText',
-  'documentText'
+  'documentText',
+  'supportSpecific',
+  'legacySource',
+  'caseManagementMode'
 ]);
 
 function formatRecordExportDate(value) {

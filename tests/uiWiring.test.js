@@ -21,4 +21,7 @@ test('historical XLSM performances are read-only in the client timeline', () => 
   assert.match(appSource, /sourceSystem === 'LEGACY_XLSM'/);
   assert.match(appSource, /Historický XLSM · pouze čtení/);
   assert.match(appSource, /!record\.isSynthetic && !isLegacyReadOnly/);
+  assert.match(appSource, /buildLegacyPerformanceSummary\(record\)/);
+  assert.match(appSource, /buildLegacyPerformanceDetail\(record\)/);
+  assert.match(appSource, /normalizePerformanceTime\(row\.cas_od \|\| row\.start_time\)/);
 });

@@ -85,6 +85,11 @@ import { appId, auth, db, hasFirebaseConfig } from '../lib/firebase.js';
 import { parseAiJson, redactClientIdentifiers, sanitizeAiInput, validatePlanOutput, validateRecordOutput } from '../lib/aiSafety.js';
 import { buildClientCaseAiPrompt, filterClientCaseAiRecords } from '../lib/clientCaseSummary.js';
 import { buildHorizontalPrinciplesAiPrompt, buildHorizontalPrinciplesFallbackText, buildZorTexts } from '../lib/zorSummary.js';
+import {
+  buildLegacyPerformanceDetail,
+  buildLegacyPerformanceSummary,
+  normalizePerformanceTime
+} from '../lib/legacyPerformancePresentation.js';
 import AiDocumentPanel from './AiDocumentPanel.jsx';
 import Ka02View from './Ka02View.jsx';
 import ProjectSwitcher from '../components/ProjectSwitcher.jsx';
@@ -631,6 +636,10 @@ function getClientJourneyMeta(record) {
   };
 }
 function buildClientJourneySummary(record) {
+  if (record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM') {
+    return buildLegacyPerformanceSummary(record);
+  }
+
   if (record.entityType === 'project_entry') {
     return record.summary || 'Klient byl zařazen do projektu a otevřela se jeho klientská cesta.';
   }
@@ -1049,6 +1058,10 @@ function buildAiClientCaseSummaryPrompt(client, timeline, supportBreakdown) {
 }
 
 function buildClientJourneyDetail(record, client = null) {
+  if (record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM') {
+    return buildLegacyPerformanceDetail(record);
+  }
+
   if (record.entityType === 'project_entry') {
     return record.summary || 'Klient byl zařazen do projektu.';
   }
@@ -1505,8 +1518,8 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
       linkedPlanGoalLabel: asSheetText(row.cil_ip),
       payload: {
         ...specific,
-        startTime: asSheetText(row.cas_od || row.start_time),
-        endTime: asSheetText(row.cas_do || row.end_time),
+        startTime: normalizePerformanceTime(row.cas_od || row.start_time),
+        endTime: normalizePerformanceTime(row.cas_do || row.end_time),
         durationMinutes: Number.isFinite(durationMinutes) && durationMinutes > 0
           ? durationMinutes
           : hoursToMinutes(row.pocet_hodin),
