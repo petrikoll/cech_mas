@@ -70,6 +70,14 @@ function addOrUpdateUser(actorId, displayName, role, projectIds, active) {
   return appendDataObject_(DATA_SHEETS.users, value);
 }
 
+function bootstrapInitialUsers() {
+  return [
+    addOrUpdateUser('Sociální pracovník', 'Sociální pracovník', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Case manager', 'Case manager', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Odborný garant', 'Odborný garant', 'ADMIN', 'CECH,MAS', true)
+  ];
+}
+
 function authorizeBackendResources() {
   getRegistrySpreadsheet_().getName();
   getDataSpreadsheet_().getName();

@@ -77,31 +77,41 @@ function ensureClientIndex_(clientNumber, projectId, registryRow, actorId) {
 
 function syncExistingClientIndex_() {
   const rows = getRegistryRows_();
-  const indexByNumber = readDataObjects_(DATA_SHEETS.clientIndex).reduce((map, row) => {
-    map[String(Number(row.client_number))] = row;
+  const existingRows = readDataObjects_(DATA_SHEETS.clientIndex);
+  const nextRows = existingRows.map((row) => {
+    const value = Object.assign({}, row);
+    delete value.__rowNumber;
+    return value;
+  });
+  const positionByNumber = nextRows.reduce((map, row, index) => {
+    map[String(Number(row.client_number))] = index;
     return map;
   }, {});
   let createdOrUpdated = 0;
+
   rows.forEach((row, index) => {
     const projectId = normalizeProjectId_(row[REGISTRY_COLUMN.projectId]);
     const clientNumber = Number(row[REGISTRY_COLUMN.clientNumber]);
     if (!projectId || !isOccupiedRegistryRow_(row) || !Number.isInteger(clientNumber)) return;
-    const existing = indexByNumber[String(clientNumber)];
+
+    const key = String(clientNumber);
+    const existingPosition = positionByNumber[key];
+    const existing = Number.isInteger(existingPosition) ? nextRows[existingPosition] : null;
     const timestamp = nowIso_();
+
     if (existing) {
       if (requireProjectId_(existing.project_id) !== projectId) {
         throw new Error('Číslo klienta ' + clientNumber + ' je v indexu přiřazeno jinému projektu.');
       }
-      const updated = Object.assign({}, existing, {
+      nextRows[existingPosition] = Object.assign({}, existing, {
         registry_row: index + 2,
         status: 'ACTIVE',
         updated_at: timestamp,
         updated_by: 'SYSTEM'
       });
-      delete updated.__rowNumber;
-      updateDataObjectAtRow_(DATA_SHEETS.clientIndex, existing.__rowNumber, updated);
     } else {
-      const created = appendDataObject_(DATA_SHEETS.clientIndex, {
+      positionByNumber[key] = nextRows.length;
+      nextRows.push({
         client_id: uuid_(),
         client_number: clientNumber,
         project_id: projectId,
@@ -112,10 +122,17 @@ function syncExistingClientIndex_() {
         updated_at: timestamp,
         updated_by: 'SYSTEM'
       });
-      indexByNumber[String(clientNumber)] = created;
     }
     createdOrUpdated += 1;
   });
+
+  replaceSheetValues_(
+    DATA_SHEETS.clientIndex.name,
+    [DATA_SHEETS.clientIndex.headers].concat(
+      nextRows.map((row) => DATA_SHEETS.clientIndex.headers.map((header) => row[header] ?? ''))
+    )
+  );
+
   return createdOrUpdated;
 }
 
