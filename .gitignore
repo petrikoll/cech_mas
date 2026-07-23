@@ -1,0 +1,31 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+vite.log
+vite.err
+*.log
+*.zip
+*.7z
+*.xls
+*.xlsm
+*.doc
+*.docx
+*.pdf
+migration-backup-*/
+reference-old-*/
+*.xlsx
+
+# Lokální analytické podklady mohou obsahovat osobní údaje.
+.analysis/
+.agents/
+reference/
+tools/
+src/assets/moravsky-beroun-erb.jpg
+
+# Lokální soubory editorů a operačního systému.
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store
