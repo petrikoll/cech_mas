@@ -84,5 +84,8 @@ function authorizeBackendResources() {
   const legacyId = PropertiesService.getScriptProperties()
     .getProperty(BACKEND_CONFIG.legacySpreadsheetProperty);
   if (legacyId) SpreadsheetApp.openById(legacyId).getName();
+  const legacyFolderId = PropertiesService.getScriptProperties()
+    .getProperty(BACKEND_CONFIG.legacyClientRootFolderProperty);
+  if (legacyFolderId) DriveApp.getFolderById(legacyFolderId).getName();
   return { ok: true };
 }

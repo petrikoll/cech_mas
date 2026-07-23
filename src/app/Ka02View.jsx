@@ -264,7 +264,7 @@ function Ka02View({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">Zatím bez výkonů z nové aplikace.</p>
+              <p className="text-sm text-slate-500">Zatím bez evidovaných výkonů.</p>
             )}
           </Panel>
         </div>

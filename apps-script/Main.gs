@@ -82,6 +82,19 @@ function doPost(e) {
         bridge: rebuildLegacyBridge_(context, payload.all_projects ? '' : projectId)
       });
     }
+    if (action === 'syncLegacyPerformances') {
+      context = assertProjectAccess_(payload.actor_id, projectId, ['GARANT', 'ADMIN']);
+      return jsonResponse_({
+        ok: true,
+        import: syncLegacyPerformances_(context, {
+          offset: payload.offset,
+          batchSize: payload.batch_size,
+          dryRun: payload.dry_run === true,
+          force: payload.force === true,
+          projectId: payload.all_projects ? '' : projectId
+        })
+      });
+    }
 
     writeAudit_(context, 'POST', 'API', action, 'ERROR', 'Unknown action');
     return jsonResponse_({ ok: false, error: 'Neznámá akce.' });

@@ -1483,9 +1483,12 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
     const supportSpecific = { ...(specific.supportSpecific || {}), ...mapSheetColumnsToKA1SupportSpecific(row) };
     const activityCodes = parseSheetJson(row.activity_codes_json, []);
     const durationMinutes = Number(row.duration_minutes);
+    const sourceSystem = asSheetText(row.source_system || 'NEW_APP').toUpperCase();
     records.push({
       id,
       remoteSource: 'google-sheet',
+      sourceSystem,
+      isLegacyReadOnly: sourceSystem === 'LEGACY_XLSM',
       entityType: 'consultations',
       ka: 'KA1',
       title: asSheetText(row.typ_podpory) ||
@@ -1510,11 +1513,17 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
         consultationType: asSheetText(row.typ_podpory),
         supportArea: asSheetText(row.tema_podpory || row.phase_code),
         activityCodes,
+        meetingForm: asSheetText(row.meeting_form),
         supportSpecific,
         topics: asSheetText(row.popis || row.case_note || row.tema_podpory),
         outcome: asSheetText(row.vysledek),
         nextSteps: asSheetText(row.dalsi_krok),
-        place: asSheetText(row.forma_poskytovani || row.meeting_form || row.place),
+        place: asSheetText(row.place || row.forma_poskytovani),
+        legacySource: sourceSystem === 'LEGACY_XLSM' ? {
+          fileName: asSheetText(row.legacy_source_file_name),
+          sheetName: asSheetText(row.legacy_source_sheet),
+          anchor: asSheetText(row.legacy_source_anchor)
+        } : null,
         linkedPlanGoalId: asSheetText(row.cil_ip_id),
         linkedPlanGoalLabel: asSheetText(row.cil_ip),
         caseManagementMode: false
@@ -4072,6 +4081,10 @@ function App() {
 
   const deleteRecord = async (record) => {
     if (!record?.id) return;
+    if (record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM') {
+      setFlash('Historický výkon z XLSM je v aplikaci pouze pro čtení.');
+      return;
+    }
     const confirmed = window.confirm(`Opravdu smazat záznam "${record.title || 'bez názvu'}"?`);
     if (!confirmed) return;
 
@@ -6040,6 +6053,10 @@ ${rawPlanOutput}` }] }],
 
   const editJourneyRecord = (record) => {
     if (!record || record.isSynthetic) return;
+    if (record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM') {
+      setFlash('Historický výkon z XLSM je v aplikaci pouze pro čtení.');
+      return;
+    }
     if (!confirmAndResetBeforeViewChange()) return;
     const payload = record.payload || {};
     const clientId = record.clientId || record.clientIds?.[0] || selectedClient?.id || '';
@@ -6982,6 +6999,8 @@ ${rawPlanOutput}` }] }],
                             const summary = buildClientJourneySummary(record);
                             const detail = buildClientJourneyDetail(record, selectedClient);
                             const isExpanded = expandedJourneyRecordIds.includes(record.id);
+                            const isLegacyReadOnly =
+                              record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM';
 
                             return (
                               <div key={record.id} className="grid gap-2 md:grid-cols-[72px_96px_24px_minmax(0,1fr)] md:items-start">
@@ -7017,6 +7036,11 @@ ${rawPlanOutput}` }] }],
                                         <span className="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
                                           {meta.label}
                                         </span>
+                                        {isLegacyReadOnly && (
+                                          <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                                            Historický XLSM · pouze čtení
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="mt-2 flex items-start gap-2">
                                         <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl ${tone.badge}`}>
@@ -7048,7 +7072,7 @@ ${rawPlanOutput}` }] }],
                                         <Download className="h-3 w-3" />
                                         Stáhnout
                                       </button>
-                                      {!record.isSynthetic && (
+                                      {!record.isSynthetic && !isLegacyReadOnly && (
                                         <>
                                           <button
                                             type="button"

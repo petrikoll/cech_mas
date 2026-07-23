@@ -41,7 +41,10 @@ function ensureDataSheet_(sheetSpec) {
   const currentHeaders = sheet.getRange(1, 1, 1, headers.length).getDisplayValues()[0];
   const headerMismatch = headers.some((header, index) => currentHeaders[index] !== header);
   if (headerMismatch) {
-    if (sheet.getLastRow() > 1 && currentHeaders.some(Boolean)) {
+    const appendOnlyExtension = currentHeaders.every((header, index) =>
+      !header || header === headers[index]
+    );
+    if (sheet.getLastRow() > 1 && currentHeaders.some(Boolean) && !appendOnlyExtension) {
       throw new Error('List ' + sheetSpec.name + ' má neočekávanou strukturu hlavičky.');
     }
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);

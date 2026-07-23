@@ -16,3 +16,9 @@ test('KA1 performance form is bundled with the main React runtime', () => {
   assert.match(appSource, /import Ka02View from '\.\/Ka02View\.jsx';/);
   assert.doesNotMatch(appSource, /const Ka02View = React\.lazy/);
 });
+
+test('historical XLSM performances are read-only in the client timeline', () => {
+  assert.match(appSource, /sourceSystem === 'LEGACY_XLSM'/);
+  assert.match(appSource, /Historický XLSM · pouze čtení/);
+  assert.match(appSource, /!record\.isSynthetic && !isLegacyReadOnly/);
+});

@@ -7,6 +7,7 @@ const BACKEND_CONFIG = Object.freeze({
   registrySpreadsheetProperty: 'CLIENT_REGISTRY_SPREADSHEET_ID',
   dataSpreadsheetProperty: 'DATA_SPREADSHEET_ID',
   legacySpreadsheetProperty: 'LEGACY_STATS_SPREADSHEET_ID',
+  legacyClientRootFolderProperty: 'LEGACY_CLIENT_ROOT_FOLDER_ID',
   cechRootFolderProperty: 'CECH_CLIENT_ROOT_FOLDER_ID',
   masRootFolderProperty: 'MAS_CLIENT_ROOT_FOLDER_ID',
   cechContractTemplateProperty: 'CECH_CONTRACT_TEMPLATE_ID',
@@ -72,7 +73,16 @@ const DATA_SHEETS = Object.freeze({
       'performance_id', 'project_id', 'client_id', 'client_number', 'phase_code',
       'activity_codes_json', 'meeting_form', 'date', 'place', 'start_time', 'end_time',
       'duration_minutes', 'case_note', 'worker_id', 'worker_name', 'status',
-      'source_system', 'idempotency_key', 'created_at', 'created_by', 'updated_at', 'updated_by'
+      'source_system', 'idempotency_key', 'created_at', 'created_by', 'updated_at', 'updated_by',
+      'legacy_source_file_id', 'legacy_source_file_name', 'legacy_source_sheet',
+      'legacy_source_anchor', 'source_fingerprint', 'source_modified_at', 'imported_at'
+    ])
+  }),
+  legacyImportCache: Object.freeze({
+    name: 'LegacyImportCache',
+    headers: Object.freeze([
+      'legacy_file_id', 'legacy_file_name', 'client_number', 'source_modified_at',
+      'last_imported_at', 'status', 'performance_count', 'error'
     ])
   }),
   legacyMap: Object.freeze({

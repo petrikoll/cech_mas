@@ -66,6 +66,22 @@ Renderu. Nesmí být ve `VITE_*` proměnné ani ve frontendu.
 Starý list `Klientská Data` se nepřepisuje. Přepnutí dashboardu na bridge se
 provede až po kontrolním porovnání součtů.
 
+## Historické klientské výkony
+
+`syncLegacyPerformances` načítá jednotlivé výkony přímo z klientských XLSM ve
+složce určené Script Property `LEGACY_CLIENT_ROOT_FOLDER_ID`. Import:
+
+- páruje soubor s klientem podle globálního `client_number` v `ClientIndex`,
+- vynechá klienty mimo projekty CECH/MAS,
+- načte datum, čas od–do, místo, formu, vybrané činnosti a zápis,
+- uloží stabilní ID zdrojového souboru, listu a slotu,
+- je idempotentní a při opakování nevytvoří duplikáty,
+- označí záznam `source_system=LEGACY_XLSM`,
+- ponechá historické výkony v aplikaci pouze pro čtení.
+
+Neúplné sloty bez data, platného času nebo činnosti se nezapíší a zůstanou
+uvedené v listu `LegacyImportCache` jako stav `PARTIAL`.
+
 ## Zatím nezapojené kroky
 
 Vytváření Drive složek a doplňování smluv/souhlasů bude přidáno po potvrzení

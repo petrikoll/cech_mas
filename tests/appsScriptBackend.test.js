@@ -9,6 +9,7 @@ const sourceFiles = [
   'Repository.gs',
   'Clients.gs',
   'Performances.gs',
+  'LegacyPerformanceImport.gs',
   'LegacyBridge.gs',
   'Main.gs',
   'Setup.gs'
@@ -23,7 +24,7 @@ const context = vm.createContext({
   Utilities: {
     formatDate: (date) => new Date(date).toISOString().slice(0, 10),
     getUuid: () => 'test-uuid',
-    computeDigest: () => [1, 2, 3],
+    computeDigest: () => Array.from({ length: 32 }, (_, index) => index + 1),
     DigestAlgorithm: { SHA_256: 'SHA_256' }
   }
 });
@@ -38,7 +39,11 @@ this.__backendTest = {
   findNextClientNumberFromRows_,
   aggregateNewPerformances_,
   durationToMinutes_,
-  minutesToDurationText_
+  minutesToDurationText_,
+  normalizeLegacyTime_,
+  legacyPhaseForSheetName_,
+  parseLegacyActivityCode_,
+  buildLegacyPerformanceStableId_
 };`, context);
 
 const backend = context.__backendTest;
@@ -123,6 +128,25 @@ test('bridge agreguje jen aktivní výkony z nové aplikace', () => {
 test('bridge převádí staré časové hodnoty beze ztráty minut', () => {
   assert.equal(backend.durationToMinutes_('3:30'), 210);
   assert.equal(backend.minutesToDurationText_(210), '3:30');
+});
+
+test('historický import rozpozná tři listy výkonů a kódy činností', () => {
+  assert.equal(backend.legacyPhaseForSheetName_('Jednání se zájemcem'), 'A');
+  assert.equal(backend.legacyPhaseForSheetName_('Map. závazků a příčin předluž.'), 'B');
+  assert.equal(backend.legacyPhaseForSheetName_('Hledání a realizace řešení'), 'C');
+  assert.equal(backend.parseLegacyActivityCode_('A', '3. Uzavření smlouvy'), 'A3');
+  assert.equal(backend.parseLegacyActivityCode_('C', '7. Právní poradenství.'), 'C7');
+  assert.equal(backend.parseLegacyActivityCode_('B', '7. Neplatná činnost'), '');
+});
+
+test('historický import normalizuje čas a vytváří stabilní ID slotu', () => {
+  assert.equal(backend.normalizeLegacyTime_('9:05'), '09:05');
+  assert.equal(backend.normalizeLegacyTime_('09:05:00'), '09:05');
+  assert.equal(backend.normalizeLegacyTime_('25:00'), '');
+  const first = backend.buildLegacyPerformanceStableId_('file-1', 'Jednání se zájemcem', 'B4');
+  const second = backend.buildLegacyPerformanceStableId_('file-1', 'Jednání se zájemcem', 'b4');
+  assert.equal(first, second);
+  assert.match(first, /^LEGACY-[a-f0-9]{40}$/);
 });
 
 test('Apps Script zdroje neobsahují pevně vložené Google ID ani token', () => {
