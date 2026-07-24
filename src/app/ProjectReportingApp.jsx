@@ -1452,7 +1452,7 @@ function stringifyPlanGoals(goals) {
     .join('\n\n');
 }
 
-function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], meetings = [], networkMeetings = [], partners = [], education = [], supervision = [], paymentPlans = [] }, clientIndex = {}) {
+function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], meetings = [], networkMeetings = [], partners = [], education = [], supervision = [], paymentPlans = [], insolvencyVerifications = [] }, clientIndex = {}) {
   const clientName = (clientId) => clientIndex[clientId]?.fullName || clientId || '';
   const statusOk = (row) => !String(row.status || '').toLowerCase().includes('smaz');
   const records = [];
@@ -1733,6 +1733,38 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
   paymentPlans.filter(statusOk).forEach((row) => {
     const record = mapPaymentPlanRowToRecord(row, clientIndex);
     if (record) records.push(record);
+  });
+
+  insolvencyVerifications.forEach((row) => {
+    const clientId = asSheetText(row.client_id);
+    if (!clientId) return;
+    const insolvencyDate = asSheetDate(row.insolvency_date);
+    records.push({
+      id: `isir-${clientId}`,
+      remoteSource: 'google-sheet',
+      sourceSystem: 'ISIR_CUZK_WS',
+      entityType: 'insolvency_verification',
+      ka: '',
+      title: 'Ověření insolvence v ISIR',
+      activityDate: asSheetDate(row.verified_at),
+      worker: asSheetText(row.verified_by),
+      clientId,
+      clientIds: [clientId],
+      clientName: clientName(clientId),
+      documentText: '',
+      documentUrl: asSheetText(row.detail_url),
+      payload: {
+        matched: /^(ano|true|1)$/i.test(asSheetText(row.matched)),
+        insolvencyDate,
+        caseNumber: asSheetText(row.case_number),
+        caseStatus: asSheetText(row.case_status),
+        verifiedAt: asSheetText(row.verified_at),
+        sourceStatus: asSheetText(row.source_status)
+      },
+      indicatorFlags: {},
+      createdAt: Date.parse(asSheetText(row.verified_at)) || 0,
+      updatedAt: Date.parse(asSheetText(row.verified_at)) || 0
+    });
   });
 
   return records.sort(compareTimelineRecordsDesc);
@@ -2150,6 +2182,7 @@ function App() {
   const generatedOutputSaveLockRef = useRef(false);
   const [isProvisioningClientFolder, setIsProvisioningClientFolder] = useState(false);
   const [isSummarizingCase, setIsSummarizingCase] = useState(false);
+  const [isVerifyingInsolvency, setIsVerifyingInsolvency] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [clientCaseSummary, setClientCaseSummary] = useState('');
@@ -2500,7 +2533,7 @@ function App() {
 
     const fetchSheetRecords = async () => {
       try {
-        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics] = await Promise.all([
+        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics, insolvencyVerifications] = await Promise.all([
           fetchAction('listIndividualPlans'),
           fetchAction('listPerformances'),
           fetchAction('listMeetings'),
@@ -2521,6 +2554,10 @@ function App() {
           fetchAction('listStatistics').catch((error) => {
             console.warn('Statistics records load skipped:', error);
             return { statistics: [] };
+          }),
+          fetchAction('listInsolvencyVerifications').catch((error) => {
+            console.warn('ISIR verifications load skipped:', error);
+            return { insolvencyVerifications: [] };
           })
         ]);
         if (cancelled) return;
@@ -2533,7 +2570,8 @@ function App() {
           partners: partners.partners || [],
           education: education.education || education.educations || education.vzdelavani || [],
           supervision: supervision.supervision || supervision.supervisions || supervision.supervize || [],
-          paymentPlans: paymentPlans.paymentPlans || []
+          paymentPlans: paymentPlans.paymentPlans || [],
+          insolvencyVerifications: insolvencyVerifications.insolvencyVerifications || []
         }, clientIndex).map((record) => ({
           ...record,
           projectId: activeProjectId,
@@ -3114,6 +3152,13 @@ function App() {
       }
     };
   }, [records, selectedClient]);
+
+  const selectedClientInsolvencyVerification = useMemo(
+    () => records.find(
+      (record) => record.entityType === 'insolvency_verification' && record.clientId === selectedClientId
+    ) || null,
+    [records, selectedClientId]
+  );
 
   const tpmRecords = useMemo(
     () =>
@@ -4300,6 +4345,38 @@ function App() {
       setFlash(message);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const verifySelectedClientInsolvency = async () => {
+    if (!selectedClient || isVerifyingInsolvency) return;
+    setIsVerifyingInsolvency(true);
+    try {
+      const result = await postGoogleSheetAction({
+        action: 'verifyClientInsolvency',
+        client_id: selectedClient.id
+      });
+      const row = result?.insolvencyVerification;
+      if (!row) throw new Error('ISIR nevrátil výsledek ověření.');
+      const [record] = mapSheetRecordsToAppRecords({
+        insolvencyVerifications: [row]
+      }, clientIndex);
+      if (record) {
+        setRecords((previous) => [
+          record,
+          ...previous.filter((item) => item.id !== record.id)
+        ].sort(compareTimelineRecordsDesc));
+      }
+      setFlash(
+        /^(ano|true|1)$/i.test(String(row.matched || ''))
+          ? `ISIR ověřen: insolvence od ${formatDateLabel(row.insolvency_date)}.`
+          : 'ISIR ověřen: klient nemá započitatelný vstup do insolvence od 1. 3. 2026.'
+      );
+    } catch (error) {
+      console.error('ISIR verification failed:', error);
+      setFlash(saveErrorMessage('Ověření v ISIR se nezdařilo', error));
+    } finally {
+      setIsVerifyingInsolvency(false);
     }
   };
 
@@ -7758,6 +7835,15 @@ ${rawPlanOutput}` }] }],
                     {isSummarizingCase ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCopy className="h-4 w-4" />}
                     Shrnout zakázku AI
                   </button>
+                  <button
+                    type="button"
+                    onClick={verifySelectedClientInsolvency}
+                    disabled={isVerifyingInsolvency}
+                    className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-800 hover:bg-blue-50 disabled:opacity-60"
+                  >
+                    {isVerifyingInsolvency ? <Loader2 className="h-4 w-4 animate-spin" /> : <Scale className="h-4 w-4" />}
+                    {isVerifyingInsolvency ? 'Ověřuji v ISIR…' : 'Ověřit insolvenci v ISIR'}
+                  </button>
                   {selectedClientDriveBundle?.payload?.clientFolderUrl && (
                     <a
                       href={selectedClientDriveBundle.payload.clientFolderUrl}
@@ -7775,6 +7861,38 @@ ${rawPlanOutput}` }] }],
                   <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-indigo-100 bg-white p-3 text-sm leading-relaxed text-slate-800">
                     {clientCaseSummary}
                   </pre>
+                )}
+
+                {selectedClientInsolvencyVerification && (
+                  <div className={`mt-3 rounded-lg border px-3 py-2 text-sm ${
+                    selectedClientInsolvencyVerification.payload?.matched
+                      ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
+                      : 'border-slate-200 bg-white text-slate-700'
+                  }`}>
+                    <div className="font-bold">
+                      {selectedClientInsolvencyVerification.payload?.matched
+                        ? 'ISIR: započitatelná insolvence'
+                        : 'ISIR: bez započitatelné insolvence od 1. 3. 2026'}
+                    </div>
+                    <div className="mt-1 text-xs">
+                      {selectedClientInsolvencyVerification.payload?.insolvencyDate
+                        ? `Datum vstupu: ${formatDateLabel(selectedClientInsolvencyVerification.payload.insolvencyDate)}`
+                        : 'Datum vstupu nebylo potvrzeno'}
+                      {selectedClientInsolvencyVerification.payload?.caseNumber
+                        ? ` · Spis: ${selectedClientInsolvencyVerification.payload.caseNumber}`
+                        : ''}
+                    </div>
+                    {selectedClientInsolvencyVerification.documentUrl && (
+                      <a
+                        href={selectedClientInsolvencyVerification.documentUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex font-semibold underline"
+                      >
+                        Otevřít řízení v ISIR
+                      </a>
+                    )}
+                  </div>
                 )}
 
                 {selectedClientDriveBundle?.payload && (

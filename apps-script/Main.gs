@@ -24,6 +24,12 @@ function doGet(e) {
     if (action === 'listPaymentPlans') {
       return jsonResponse_({ ok: true, paymentPlans: listPaymentPlans_(projectId) });
     }
+    if (action === 'listInsolvencyVerifications') {
+      return jsonResponse_({
+        ok: true,
+        insolvencyVerifications: listInsolvencyVerifications_(projectId)
+      });
+    }
     if (action === 'getProjectConfig') {
       return jsonResponse_({ ok: true, project: PROJECT_CONFIG[projectId] });
     }
@@ -94,6 +100,12 @@ function doPost(e) {
       return jsonResponse_({
         ok: true,
         performance: deletePerformance_(payload.id, context)
+      });
+    }
+    if (action === 'verifyClientInsolvency') {
+      return jsonResponse_({
+        ok: true,
+        insolvencyVerification: verifyClientInsolvency_(payload.client_id, context)
       });
     }
     if (action === 'rebuildLegacyBridge') {

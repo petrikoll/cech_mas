@@ -6,7 +6,8 @@ const PROJECT_DASHBOARD_CONFIG = Object.freeze({
       Object.freeze({ key: '670031', code: '670 031', target: 2.5, baseline: 2.5, group: 'output' })
     ]),
     goals: Object.freeze([
-      Object.freeze({ key: 'approved-insolvencies', label: 'Schválené insolvence', target: 25, baseline: 0 }),
+      Object.freeze({ key: 'submitted-insolvencies', label: 'Insolvence – podáno', target: 25, baseline: 0, supplemental: true }),
+      Object.freeze({ key: 'approved-insolvencies', label: 'Insolvence – schváleno', target: 25, baseline: 0 }),
       Object.freeze({ key: 'stabilized-debt', label: 'Stabilizace dluhové situace', target: 50, baseline: 0 }),
       Object.freeze({ key: 'repaying-agreements', label: 'Splácení uzavřených dohod', target: 15, baseline: 0 }),
       Object.freeze({ key: 'financial-literacy', label: 'Zvýšení gramotnosti', target: 80, baseline: 0 }),
@@ -20,7 +21,8 @@ const PROJECT_DASHBOARD_CONFIG = Object.freeze({
       Object.freeze({ key: '670031', code: '670 031', target: 2, baseline: 2, group: 'output' })
     ]),
     goals: Object.freeze([
-      Object.freeze({ key: 'approved-insolvencies', label: 'Schválené insolvence', target: 25, baseline: 0 }),
+      Object.freeze({ key: 'submitted-insolvencies', label: 'Insolvence – podáno', target: 25, baseline: 0, supplemental: true }),
+      Object.freeze({ key: 'approved-insolvencies', label: 'Insolvence – schváleno', target: 25, baseline: 0 }),
       Object.freeze({ key: 'stabilized-debt', label: 'Stabilizace dluhové situace', target: 50, baseline: 4 }),
       Object.freeze({ key: 'repaying-agreements', label: 'Splácení uzavřených dohod', target: 15, baseline: 0 }),
       Object.freeze({ key: 'financial-literacy', label: 'Zvýšení gramotnosti', target: 80, baseline: 0 }),
@@ -42,12 +44,6 @@ const cappedPercent = (current, target) =>
 const average = (values) =>
   values.length ? values.reduce((sum, value) => sum + Number(value || 0), 0) / values.length : 0;
 
-const isAffirmativeOutcome = (value) => {
-  const text = normalize(value);
-  if (!text || /^(ne|false|0)$/.test(text) || text.includes('neschval')) return false;
-  return /^(ano|true|1)$/.test(text) || text.includes('schval') || text.includes('uspes');
-};
-
 const recordClientIds = (record) =>
   Array.isArray(record?.clientIds)
     ? record.clientIds.filter(Boolean)
@@ -63,6 +59,23 @@ const recordDurationMinutes = (record) => {
 const activityCodes = (record) => {
   const values = record?.payload?.activityCodes || record?.activityCodes || [];
   return Array.isArray(values) ? values.map((value) => String(value).toUpperCase()) : [];
+};
+
+const recordNarrative = (record) =>
+  normalize([
+    record?.documentText,
+    record?.payload?.outcome,
+    record?.payload?.topics,
+    record?.payload?.caseNote,
+    record?.payload?.description
+  ].filter(Boolean).join(' '));
+
+const documentsStoppedEnforcement = (record) => {
+  const text = recordNarrative(record);
+  return text.includes('exekuc') && (
+    text.includes('zastaven') ||
+    text.includes('zrusen')
+  );
 };
 
 const paymentMonthIndex = (value) => {
@@ -101,9 +114,9 @@ function buildProjectDashboard({ projectId, clients = [], records = [] }) {
   });
 
   const supportMinutesByClient = new Map();
-  projectRecords
-    .filter((record) => ['consultations', 'case_management'].includes(record.entityType))
-    .forEach((record) => {
+  const supportRecords = projectRecords
+    .filter((record) => ['consultations', 'case_management'].includes(record.entityType));
+  supportRecords.forEach((record) => {
       const minutes = recordDurationMinutes(record);
       recordClientIds(record).forEach((clientId) => {
         supportMinutesByClient.set(clientId, (supportMinutesByClient.get(clientId) || 0) + minutes);
@@ -111,15 +124,24 @@ function buildProjectDashboard({ projectId, clients = [], records = [] }) {
     });
 
   const supportedClientIds = new Set(
-    Array.from(supportMinutesByClient.entries())
-      .filter(([, minutes]) => minutes > 0)
-      .map(([clientId]) => clientId)
+    supportRecords.flatMap(recordClientIds)
   );
   const participants40Hours = Array.from(supportMinutesByClient.values())
     .filter((minutes) => minutes >= 40 * 60).length;
 
+  const submittedInsolvencyIds = new Set(
+    projectRecords
+      .filter((record) => activityCodes(record).includes('C3'))
+      .flatMap(recordClientIds)
+  );
   const approvedInsolvencyIds = new Set(
-    projectClients.filter((client) => isAffirmativeOutcome(client.insolvency)).map((client) => client.id)
+    projectRecords
+      .filter((record) =>
+        record.entityType === 'insolvency_verification' &&
+        record.payload?.matched === true &&
+        String(record.payload?.insolvencyDate || '') >= '2026-03-01'
+      )
+      .flatMap(recordClientIds)
   );
   const paymentPlans = projectRecords.filter((record) => record.entityType === 'payment_plan');
   const clientsRepayingAgreements = new Set(
@@ -129,17 +151,11 @@ function buildProjectDashboard({ projectId, clients = [], records = [] }) {
   );
   const stabilizedDebtIds = new Set([
     ...approvedInsolvencyIds,
-    ...projectClients
-      .filter((client) => isAffirmativeOutcome(client.paymentSchedule))
-      .map((client) => client.id),
     ...paymentPlans
-      .filter((record) =>
-        record.payload?.status === 'COMPLETED' ||
-        Object.values(record.payload?.installmentStatuses || {}).includes('PAID')
-      )
+      .filter(isQualifyingPaymentPlan)
       .flatMap(recordClientIds),
     ...projectRecords
-      .filter((record) => activityCodes(record).includes('C4'))
+      .filter(documentsStoppedEnforcement)
       .flatMap(recordClientIds)
   ]);
   const financialLiteracyIds = new Set(
@@ -157,6 +173,7 @@ function buildProjectDashboard({ projectId, clients = [], records = [] }) {
     '670031': config.indicators.find((item) => item.key === '670031')?.baseline || 0
   };
   const calculatedGoals = {
+    'submitted-insolvencies': submittedInsolvencyIds.size,
     'approved-insolvencies': approvedInsolvencyIds.size,
     'stabilized-debt': stabilizedDebtIds.size,
     'repaying-agreements': clientsRepayingAgreements.size,
@@ -179,7 +196,7 @@ function buildProjectDashboard({ projectId, clients = [], records = [] }) {
     goals,
     outputPercent: average(indicators.filter((item) => item.group === 'output').map((item) => item.percent)),
     resultPercent: average(indicators.filter((item) => item.group === 'result').map((item) => item.percent)),
-    goalsPercent: average(goals.map((item) => item.percent))
+    goalsPercent: average(goals.filter((item) => !item.supplemental).map((item) => item.percent))
   };
 }
 

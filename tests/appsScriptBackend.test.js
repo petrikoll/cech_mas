@@ -9,6 +9,7 @@ const sourceFiles = [
   'Repository.gs',
   'Clients.gs',
   'ClientDocuments.gs',
+  'InsolvencyVerification.gs',
   'PaymentPlans.gs',
   'Performances.gs',
   'LegacyClientMapping.gs',
@@ -21,6 +22,10 @@ const sourceFiles = [
 const source = sourceFiles
   .map((file) => readFileSync(new URL(`../apps-script/${file}`, import.meta.url), 'utf8'))
   .join('\n\n');
+const insolvencyVerificationSource = readFileSync(
+  new URL('../apps-script/InsolvencyVerification.gs', import.meta.url),
+  'utf8'
+);
 
 const context = vm.createContext({
   console,
@@ -55,7 +60,8 @@ this.__backendTest = {
   addClientDocumentLinks_,
   normalizePaymentMonth_,
   addPaymentMonths_,
-  buildPaymentSchedule_
+  buildPaymentSchedule_,
+  isIsirEntryOnOrAfter_
 };`, context);
 
 const backend = context.__backendTest;
@@ -69,6 +75,20 @@ test('backend přijme pouze projekty CECH a MAS', () => {
   assert.equal(backend.normalizeProjectId_('MAS'), 'MAS');
   assert.equal(backend.normalizeProjectId_('PRAC'), '');
   assert.throws(() => backend.requireProjectId_('PRAC'), /Neplatný projekt/);
+});
+
+test('ISIR započte pouze vstup do insolvence od 1. 3. 2026', () => {
+  assert.equal(backend.isIsirEntryOnOrAfter_('2026-03-01T00:00:00', '2026-03-01'), true);
+  assert.equal(backend.isIsirEntryOnOrAfter_('2026-02-28', '2026-03-01'), false);
+  assert.equal(backend.isIsirEntryOnOrAfter_('', '2026-03-01'), false);
+});
+
+test('automatické ověření ISIR dodržuje denní stáří a bezpečnou velikost dávky', () => {
+  assert.match(insolvencyVerificationSource, /ISIR_DAILY_BATCH_SIZE = 40/);
+  assert.match(insolvencyVerificationSource, /ISIR_REVERIFY_AFTER_MS = 24 \* 60 \* 60 \* 1000/);
+  assert.match(insolvencyVerificationSource, /ISIR_REQUEST_DELAY_MS = 1300/);
+  assert.match(insolvencyVerificationSource, /everyHours\(1\)/);
+  assert.match(insolvencyVerificationSource, /scheduledDailyInsolvencyVerification/);
 });
 
 test('číslování vychází pouze z obsazených klientských řádků', () => {
