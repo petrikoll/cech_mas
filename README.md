@@ -73,8 +73,17 @@ Backend je nasazený do samostatného Google Apps Script projektu.
 
 ## ISIR
 
-Horní list `ISIR` provádí kontrolu po jednom klientovi přímo ze serveru
-aplikace. Ukládá výsledek ověření, nalezená řízení a metadata PDF dokumentů do
-datových listů `InsolvencyVerifications`, `InsolvencyCases` a
-`InsolvencyDocuments`. Vybrané PDF lze archivovat do podsložky `ISIR` v
-klientské složce na Google Disku. Zdrojový odkaz zůstává vždy zachovaný.
+Horní list `ISIR` přenáší funkce původní lokální aplikace do společného rozhraní:
+
+- hromadnou i jednotlivou kontrolu proti oficiální službě ISIR,
+- přehled klientů se stavovými filtry, řazením, lhůtami a upozorněním na nové PDF,
+- detail řízení s hlavními a vedlejšími dokumenty,
+- otevření, stažení a archivaci dokumentu do klientské složky na Google Disku,
+- výběr až deseti PDF pro společnou analýzu přes Gemini 2.5 Flash,
+- strukturovaný přehled stavu, termínů, úkolů, financí a vývoje řízení,
+- kazuistiku a její export do DOCX.
+
+Výsledky jsou uložené v listech `InsolvencyVerifications`, `InsolvencyCases`,
+`InsolvencyDocuments` a `InsolvencyAnalyses`. Datum narození se do těchto
+analytických listů nekopíruje. AI analýza proběhne pouze po vědomém výběru
+dokumentů uživatelem; PDF se nestahují do logů a Gemini klíč zůstává na serveru.

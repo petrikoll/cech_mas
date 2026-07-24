@@ -8,6 +8,7 @@ import { handleXlsxExportRequest } from './xlsxExport.js';
 import { handleGoogleAppsScriptProxy } from './googleAppsScriptProxy.js';
 import { handleGeminiProxyRequest } from './geminiProxy.js';
 import { handleIsirRequest } from './isirService.js';
+import { handleIsirAnalysisRequest } from './isirAnalysis.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const distDir = resolve(__dirname, 'dist');
@@ -118,6 +119,11 @@ const server = createServer((request, response) => {
 
   if (url.pathname === '/api/isir') {
     void handleIsirRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/isir-analysis') {
+    void handleIsirAnalysisRequest(request, response);
     return;
   }
 

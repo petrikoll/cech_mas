@@ -147,11 +147,10 @@ function stableId(value) {
   return createHash('sha256').update(String(value || '')).digest('hex').slice(0, 24);
 }
 
-function parseDocumentsFromDetail(html, caseId) {
-  const text = String(html || '');
+function parsePdfLinksFromSegment(segment, caseId, seen, rowIsMain = true) {
+  const text = String(segment || '');
   const linkPattern = /<a\b[^>]*href\s*=\s*["']([^"']*dokument\.PDF[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
   const documents = [];
-  const seen = new Set();
   let match;
   while ((match = linkPattern.exec(text))) {
     const sourceUrl = new URL(match[1].replace(/&amp;/gi, '&'), ISIR_ORIGIN).toString();
@@ -165,6 +164,12 @@ function parseDocumentsFromDetail(html, caseId) {
       case_id: caseId,
       title: decodeHtml(match[2]) || 'Dokument ISIR',
       document_type: 'PDF',
+      is_main: rowIsMain && documents.length === 0 ? 'Ano' : 'Ne',
+      is_new: '',
+      included_in_case_study: '',
+      analysis_status: '',
+      analysis_json: '',
+      analysis_at: '',
       event_date: lastDate
         ? `${lastDate[3]}-${String(Number(lastDate[2])).padStart(2, '0')}-${String(Number(lastDate[1])).padStart(2, '0')}`
         : '',
@@ -176,6 +181,30 @@ function parseDocumentsFromDetail(html, caseId) {
     });
   }
   return documents;
+}
+
+function parseDocumentsFromDetail(html, caseId) {
+  const text = String(html || '');
+  const rows = [...text.matchAll(/<tr\b[^>]*>[\s\S]*?<\/tr>/gi)].map((match) => match[0]);
+  const seen = new Set();
+  const documents = [];
+  if (rows.length) {
+    rows.forEach((row) => documents.push(...parsePdfLinksFromSegment(row, caseId, seen, true)));
+  }
+  if (!documents.length) {
+    documents.push(...parsePdfLinksFromSegment(text, caseId, seen, true));
+  } else {
+    documents.push(...parsePdfLinksFromSegment(text, caseId, seen, false));
+  }
+  return documents;
+}
+
+function addMonths(dateValue, months) {
+  const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCMonth(date.getUTCMonth() + months);
+  return date.toISOString().slice(0, 10);
 }
 
 async function loadCaseDocuments(caseItem, fetchImpl) {
@@ -233,6 +262,39 @@ async function checkClient(client, options = {}) {
   const latest = [...cases]
     .sort((left, right) => right.proceeding_started_at.localeCompare(left.proceeding_started_at))[0] || null;
   const checkedAt = new Date().toISOString();
+  const enrichedCases = cases.map((item) => {
+    const caseDocuments = documents
+      .filter((document) => document.case_id === item.case_id)
+      .sort((left, right) => String(right.event_date || '').localeCompare(String(left.event_date || '')));
+    const latestDocument = caseDocuments[0] || null;
+    const insolvencyDecision = caseDocuments.find((document) =>
+      /usnesen[íi].*(úpadku|upadku)|(úpadku|upadku).*usnesen[íi]/i.test(document.title)
+    );
+    const claimDocuments = caseDocuments.filter((document) =>
+      /přihl[aá]ška pohled[aá]vky/i.test(document.title)
+    );
+    return {
+      ...item,
+      client_id: normalized.id,
+      client_number: normalized.number,
+      project_id: normalized.projectId,
+      checked_at: checkedAt,
+      document_count: caseDocuments.length,
+      main_document_count: caseDocuments.filter((document) => document.is_main === 'Ano').length,
+      secondary_document_count: caseDocuments.filter((document) => document.is_main !== 'Ano').length,
+      last_event_at: latestDocument?.event_date || '',
+      last_event_title: latestDocument?.title || '',
+      claims_deadline: insolvencyDecision ? addMonths(insolvencyDecision.event_date, 2) : '',
+      claims_count: claimDocuments.length,
+      claims_total_amount: '',
+      ai_status: '',
+      ai_model: '',
+      ai_checked_at: '',
+      ai_summary_json: '',
+      ai_case_study: '',
+      ai_case_study_at: ''
+    };
+  });
 
   return {
     verification: {
@@ -248,14 +310,7 @@ async function checkClient(client, options = {}) {
       source: 'ISIR_CUZK_WS_SERVER',
       source_status: qualifying ? 'QUALIFIED' : cases.length ? 'BEFORE_CUTOFF' : 'NOT_FOUND'
     },
-    cases: cases.map((item) => ({
-      ...item,
-      client_id: normalized.id,
-      client_number: normalized.number,
-      project_id: normalized.projectId,
-      checked_at: checkedAt,
-      document_count: documents.filter((document) => document.case_id === item.case_id).length
-    })),
+    cases: enrichedCases,
     documents: documents.map((item) => ({
       ...item,
       client_id: normalized.id,

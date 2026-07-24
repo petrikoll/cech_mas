@@ -2257,6 +2257,8 @@ function App() {
   const [insolvencyVerifications, setInsolvencyVerifications] = useState([]);
   const [insolvencyCases, setInsolvencyCases] = useState([]);
   const [insolvencyDocuments, setInsolvencyDocuments] = useState([]);
+  const [insolvencyAnalyses, setInsolvencyAnalyses] = useState([]);
+  const [isAnalyzingInsolvency, setIsAnalyzingInsolvency] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [clientCaseSummary, setClientCaseSummary] = useState('');
@@ -2636,7 +2638,7 @@ function App() {
 
     const fetchSheetRecords = async () => {
       try {
-        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics, insolvencyVerificationsResult, insolvencyCasesResult, insolvencyDocumentsResult] = await Promise.all([
+        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics, insolvencyVerificationsResult, insolvencyCasesResult, insolvencyDocumentsResult, insolvencyAnalysesResult] = await Promise.all([
           fetchAction('listIndividualPlans'),
           fetchAction('listPerformances'),
           fetchAction('listMeetings'),
@@ -2669,6 +2671,10 @@ function App() {
           fetchAction('listInsolvencyDocuments').catch((error) => {
             console.warn('ISIR documents load skipped:', error);
             return { insolvencyDocuments: [] };
+          }),
+          fetchAction('listInsolvencyAnalyses').catch((error) => {
+            console.warn('ISIR analyses load skipped:', error);
+            return { insolvencyAnalyses: [] };
           })
         ]);
         if (cancelled) return;
@@ -2676,6 +2682,7 @@ function App() {
         setInsolvencyVerifications(insolvencyVerificationsResult.insolvencyVerifications || []);
         setInsolvencyCases(insolvencyCasesResult.insolvencyCases || []);
         setInsolvencyDocuments(insolvencyDocumentsResult.insolvencyDocuments || []);
+        setInsolvencyAnalyses(insolvencyAnalysesResult.insolvencyAnalyses || []);
         const remoteRecords = mapSheetRecordsToAppRecords({
           individualPlans: plans.individualPlans || [],
           performances: performances.performances || [],
@@ -4682,6 +4689,126 @@ function App() {
       setFlash(message);
       throw error;
     }
+  };
+
+  const analyzeIsirDocuments = async ({ client, caseItem, documents }) => {
+    if (!client || !caseItem || !Array.isArray(documents) || !documents.length) {
+      throw new Error('Vyberte alespoň jeden dokument k analýze.');
+    }
+    setIsAnalyzingInsolvency(true);
+    setProjectInsolvencyNotice(
+      `Gemini analyzuje ${documents.length} PDF ve spise ${caseItem.case_number || 'ISIR'}…`
+    );
+    try {
+      const response = await fetch('/api/isir-analysis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client: {
+            id: client.id,
+            projectId: client.projectId,
+            fullName: client.fullName
+          },
+          case: caseItem,
+          documents: documents.map((document) => ({
+            document_id: document.document_id,
+            title: document.title,
+            event_date: document.event_date,
+            source_url: document.source_url
+          }))
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload.ok === false || !payload.analysis) {
+        throw new Error(payload.error || `Analýza ISIR selhala: ${response.status}`);
+      }
+      const saved = await postGoogleSheetAction({
+        action: 'saveInsolvencyAnalysis',
+        analysis: payload.analysis
+      });
+      const savedResult = saved?.result || {};
+      const storedAnalysis = {
+        ...(savedResult.analysis || payload.analysis),
+        result: payload.analysis.result,
+        result_json: JSON.stringify(payload.analysis.result || {})
+      };
+      setInsolvencyAnalyses((previous) => [
+        storedAnalysis,
+        ...previous.filter((item) => item.analysis_id !== storedAnalysis.analysis_id)
+      ]);
+      if (savedResult.case) {
+        setInsolvencyCases((previous) => previous.map((item) =>
+          item.case_id === savedResult.case.case_id ? savedResult.case : item
+        ));
+      }
+      if (Array.isArray(savedResult.documents)) {
+        const byId = Object.fromEntries(savedResult.documents.map((item) => [item.document_id, item]));
+        setInsolvencyDocuments((previous) => previous.map((item) => byId[item.document_id] || item));
+      }
+      const message = `AI analýza ${documents.length} dokumentů byla dokončena a uložena.`;
+      setProjectInsolvencyNotice(message);
+      setFlash(message);
+      return storedAnalysis;
+    } catch (error) {
+      const message = saveErrorMessage('AI analýzu dokumentů se nepodařilo dokončit', error);
+      setProjectInsolvencyNotice(message);
+      setFlash(message);
+      throw error;
+    } finally {
+      setIsAnalyzingInsolvency(false);
+    }
+  };
+
+  const markIsirDocumentsSeen = async (caseId) => {
+    const result = await postGoogleSheetAction({
+      action: 'markIsirDocumentsSeen',
+      case_id: caseId
+    });
+    const updated = Array.isArray(result?.documents) ? result.documents : [];
+    const byId = Object.fromEntries(updated.map((item) => [item.document_id, item]));
+    setInsolvencyDocuments((previous) => previous.map((item) => byId[item.document_id] || item));
+    return updated;
+  };
+
+  const exportIsirCaseStudy = async ({ client, caseItem, analysis }) => {
+    const result = analysis?.result || {};
+    const finances = result.finances || {};
+    const bulletText = (items) => (Array.isArray(items) ? items.map((item) =>
+      typeof item === 'string'
+        ? `• ${item}`
+        : `• ${item.date ? `${formatDateLabel(item.date)} – ` : ''}${item.label || item.event || ''}`
+    ).join('\n') : '');
+    await downloadOfficeExport('/api/export-record-docx', {
+      title: 'Kazuistika insolvenčního řízení',
+      rows: [
+        { label: 'Klient', value: client?.fullName || '' },
+        { label: 'Projekt', value: client?.projectId || activeProjectId },
+        { label: 'Spisová značka', value: caseItem?.case_number || '' },
+        { label: 'Stav řízení', value: caseItem?.case_status || '' },
+        { label: 'Datum analýzy', value: formatDateLabel(analysis?.created_at || todayIso()) },
+        { label: 'Model', value: analysis?.model || 'gemini-2.5-flash' }
+      ],
+      text: result.case_study || caseItem?.ai_case_study || result.status_now || '',
+      sections: [
+        { heading: 'Aktuální stav', text: result.status_now || '' },
+        { heading: 'Nejbližší termíny', text: bulletText(result.nearest_deadlines) },
+        { heading: 'Co ověřit a řešit s klientem', text: bulletText(result.advisor_actions) },
+        { heading: 'Úkoly klienta', text: bulletText(result.client_actions) },
+        {
+          heading: 'Finance a pohledávky',
+          rows: [
+            { label: 'Přezkoumané přihlášky', value: finances.reviewed_claims_count ?? 'Neuvedeno' },
+            { label: 'Pohledávky celkem', value: finances.claims_total_amount ?? 'Neuvedeno' },
+            { label: 'Aktuální uspokojení', value: finances.current_satisfaction_percent == null ? 'Neuvedeno' : `${finances.current_satisfaction_percent} %` },
+            { label: 'Očekávané uspokojení za 3 roky', value: finances.expected_satisfaction_3y_percent == null ? 'Neuvedeno' : `${finances.expected_satisfaction_3y_percent} %` },
+            { label: 'Očekávané uspokojení za 5 let', value: finances.expected_satisfaction_5y_percent == null ? 'Neuvedeno' : `${finances.expected_satisfaction_5y_percent} %` }
+          ],
+          text: bulletText(finances.summary)
+        },
+        { heading: 'Vývoj řízení', text: bulletText(result.proceeding_evolution), pageBreakBefore: true },
+        { heading: 'Nejistoty a body ke kontrole', text: bulletText(result.uncertainties) }
+      ]
+    }, `kazuistika-isir-${slugify(client?.fullName || 'klient')}-${slugify(caseItem?.case_number || 'spis')}.docx`);
   };
 
   const handleGenerateText = async () => {
@@ -8128,11 +8255,17 @@ ${rawPlanOutput}` }] }],
               cases={insolvencyCases}
               documents={insolvencyDocuments}
               verifications={insolvencyVerifications}
+              analyses={insolvencyAnalyses}
               isChecking={isVerifyingInsolvency || isVerifyingProjectInsolvencies}
+              isAnalyzing={isAnalyzingInsolvency}
               progressNotice={projectInsolvencyNotice}
               onCheckClient={verifyClientFromIsirView}
               onCheckProject={verifyProjectInsolvencies}
               onArchiveDocument={archiveIsirDocument}
+              onAnalyzeDocuments={analyzeIsirDocuments}
+              onMarkDocumentsSeen={markIsirDocumentsSeen}
+              onExportCaseStudy={exportIsirCaseStudy}
+              onEditClient={openClientEditForm}
             />
           </React.Suspense>
         )}

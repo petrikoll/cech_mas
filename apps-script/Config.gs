@@ -100,7 +100,11 @@ const DATA_SHEETS = Object.freeze({
     headers: Object.freeze([
       'case_id', 'project_id', 'client_id', 'client_number', 'case_number',
       'proceeding_started_at', 'proceeding_ended_at', 'case_status', 'detail_url',
-      'city', 'document_count', 'checked_at', 'updated_at', 'updated_by'
+      'city', 'document_count', 'checked_at', 'updated_at', 'updated_by',
+      'main_document_count', 'secondary_document_count',
+      'last_event_at', 'last_event_title', 'claims_deadline', 'claims_count',
+      'claims_total_amount', 'ai_status', 'ai_model', 'ai_checked_at',
+      'ai_summary_json', 'ai_case_study', 'ai_case_study_at'
     ])
   }),
   insolvencyDocuments: Object.freeze({
@@ -108,7 +112,17 @@ const DATA_SHEETS = Object.freeze({
     headers: Object.freeze([
       'document_id', 'case_id', 'project_id', 'client_id', 'title', 'document_type',
       'event_date', 'source_url', 'drive_file_id', 'drive_url', 'original_size',
-      'stored_size', 'checked_at', 'updated_at', 'updated_by'
+      'stored_size', 'checked_at', 'updated_at', 'updated_by',
+      'is_main', 'is_new', 'included_in_case_study',
+      'analysis_status', 'analysis_json', 'analysis_at'
+    ])
+  }),
+  insolvencyAnalyses: Object.freeze({
+    name: 'InsolvencyAnalyses',
+    headers: Object.freeze([
+      'analysis_id', 'case_id', 'project_id', 'client_id', 'kind',
+      'document_ids_json', 'result_json', 'model', 'created_at', 'created_by',
+      'updated_at', 'updated_by'
     ])
   }),
   performances: Object.freeze({

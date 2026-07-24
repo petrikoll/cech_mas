@@ -36,6 +36,9 @@ function doGet(e) {
     if (action === 'listInsolvencyDocuments') {
       return jsonResponse_({ ok: true, insolvencyDocuments: listInsolvencyDocuments_(projectId) });
     }
+    if (action === 'listInsolvencyAnalyses') {
+      return jsonResponse_({ ok: true, insolvencyAnalyses: listInsolvencyAnalyses_(projectId) });
+    }
     if (action === 'getProjectConfig') {
       return jsonResponse_({ ok: true, project: PROJECT_CONFIG[projectId] });
     }
@@ -132,6 +135,18 @@ function doPost(e) {
       return jsonResponse_({
         ok: true,
         document: archiveIsirDocument_(payload.document_id, context)
+      });
+    }
+    if (action === 'saveInsolvencyAnalysis') {
+      return jsonResponse_({
+        ok: true,
+        result: saveInsolvencyAnalysis_(payload.analysis || {}, context)
+      });
+    }
+    if (action === 'markIsirDocumentsSeen') {
+      return jsonResponse_({
+        ok: true,
+        documents: markIsirDocumentsSeen_(payload.case_id, context)
       });
     }
     if (action === 'rebuildLegacyBridge') {

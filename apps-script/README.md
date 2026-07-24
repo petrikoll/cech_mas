@@ -113,13 +113,18 @@ narození. Apps Script přijímá výsledek pouze pro klienta ze zvoleného proj
 a ukládá jej akcí `saveInsolvencySnapshot`. Do cíle
 „Schválené insolvence“ se uloží pouze ověření s datem právní moci usnesení
 o úpadku od 1. 3. 2026 včetně. Výsledek, datum, spisová značka, odkaz a čas
-ověření se uchovávají v listu `InsolvencyVerifications`. Řízení a dokumenty
-jsou v listech `InsolvencyCases` a `InsolvencyDocuments`; datum narození se do
-těchto listů nekopíruje.
+ověření se uchovávají v listu `InsolvencyVerifications`. Řízení, dokumenty a
+strukturované výstupy Gemini jsou v listech `InsolvencyCases`,
+`InsolvencyDocuments` a `InsolvencyAnalyses`; datum narození se do těchto listů
+nekopíruje.
 
 Akce `archiveIsirDocument` uloží vybrané PDF do podsložky `ISIR` ve složce
 klienta na Google Disku, zachová zdrojový odkaz a opakovaným spuštěním
 nevytváří další kopii stejného dokumentu.
+
+Akce `saveInsolvencyAnalysis` ukládá výsledek analýzy vybraných PDF, kazuistiku,
+finanční souhrn a dílčí shrnutí dokumentů. Akce `markIsirDocumentsSeen` odstraní
+upozornění „nové“ až po vědomém potvrzení uživatele.
 
 Pro automatickou kontrolu je nutné jednou ručně spustit:
 

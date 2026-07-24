@@ -193,9 +193,14 @@ test('hlavní navigace obsahuje plnohodnotný list ISIR', () => {
   assert.match(appSource, /mainView === 'isir'/);
   assert.match(appSource, /saveInsolvencySnapshot/);
   assert.match(appSource, /archiveIsirDocument/);
-  assert.match(isirViewSource, /Zkontrolovat celý projekt/);
+  assert.match(isirViewSource, /Hromadná kontrola ISIR/);
   assert.match(isirViewSource, /Uložit na Disk/);
   assert.match(isirViewSource, /Dokumenty/);
+  assert.match(isirViewSource, /Vytvořit AI shrnutí/);
+  assert.match(isirViewSource, /Kazuistika AI/);
+  assert.match(isirViewSource, /Ve lhůtě pro přihlášky/);
+  assert.match(appSource, /saveInsolvencyAnalysis/);
+  assert.match(appSource, /markIsirDocumentsSeen/);
 });
 
 test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy', () => {

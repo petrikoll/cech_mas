@@ -38,6 +38,17 @@ function listInsolvencyDocuments_(projectId) {
     });
 }
 
+function listInsolvencyAnalyses_(projectId) {
+  const normalizedProjectId = requireProjectId_(projectId);
+  return readDataObjects_(DATA_SHEETS.insolvencyAnalyses)
+    .filter((row) => row.project_id === normalizedProjectId)
+    .map((row) => {
+      const value = Object.assign({}, row);
+      delete value.__rowNumber;
+      return value;
+    });
+}
+
 function normalizeIsirSourceUrl_(value) {
   const url = normalizeText_(value);
   if (!/^https:\/\/isir\.justice\.cz(?::8443)?\//i.test(url)) {
@@ -75,6 +86,8 @@ function saveInsolvencySnapshot_(snapshot, context) {
   cases.forEach((caseItem) => {
     const caseId = normalizeText_(caseItem.case_id);
     if (!caseId) return;
+    const existingCase = readDataObjects_(DATA_SHEETS.insolvencyCases)
+      .find((row) => String(row.case_id || '') === caseId);
     upsertDataObject_(DATA_SHEETS.insolvencyCases, 'case_id', caseId, {
       case_id: caseId,
       project_id: context.projectId,
@@ -87,6 +100,19 @@ function saveInsolvencySnapshot_(snapshot, context) {
       detail_url: normalizeText_(caseItem.detail_url),
       city: normalizeText_(caseItem.city),
       document_count: Math.max(0, Number(caseItem.document_count) || 0),
+      main_document_count: Math.max(0, Number(caseItem.main_document_count) || 0),
+      secondary_document_count: Math.max(0, Number(caseItem.secondary_document_count) || 0),
+      last_event_at: normalizeIsirDate_(caseItem.last_event_at),
+      last_event_title: normalizeText_(caseItem.last_event_title),
+      claims_deadline: normalizeIsirDate_(caseItem.claims_deadline),
+      claims_count: Math.max(0, Number(caseItem.claims_count) || 0),
+      claims_total_amount: existingCase ? existingCase.claims_total_amount : '',
+      ai_status: existingCase ? existingCase.ai_status : '',
+      ai_model: existingCase ? existingCase.ai_model : '',
+      ai_checked_at: existingCase ? existingCase.ai_checked_at : '',
+      ai_summary_json: existingCase ? existingCase.ai_summary_json : '',
+      ai_case_study: existingCase ? existingCase.ai_case_study : '',
+      ai_case_study_at: existingCase ? existingCase.ai_case_study_at : '',
       checked_at: normalizeText_(caseItem.checked_at) || timestamp,
       updated_at: timestamp,
       updated_by: context.actorId
@@ -109,6 +135,12 @@ function saveInsolvencySnapshot_(snapshot, context) {
       document_type: normalizeText_(documentItem.document_type) || 'PDF',
       event_date: normalizeIsirDate_(documentItem.event_date),
       source_url: normalizeIsirSourceUrl_(documentItem.source_url),
+      is_main: isTruthy_(documentItem.is_main) ? 'Ano' : 'Ne',
+      is_new: existing ? existing.is_new : 'Ano',
+      included_in_case_study: existing ? existing.included_in_case_study : '',
+      analysis_status: existing ? existing.analysis_status : '',
+      analysis_json: existing ? existing.analysis_json : '',
+      analysis_at: existing ? existing.analysis_at : '',
       drive_file_id: existing ? existing.drive_file_id : '',
       drive_url: existing ? existing.drive_url : '',
       original_size: existing ? existing.original_size : '',
@@ -179,6 +211,111 @@ function archiveIsirDocument_(documentId, context) {
   upsertDataObject_(DATA_SHEETS.insolvencyDocuments, 'document_id', normalizedDocumentId, stored);
   writeAudit_(context, 'ARCHIVE_ISIR_DOCUMENT', 'ISIR_DOCUMENT', normalizedDocumentId, 'OK', fileName);
   return stored;
+}
+
+function saveInsolvencyAnalysis_(analysisInput, context) {
+  const input = analysisInput || {};
+  const caseId = normalizeText_(input.case_id);
+  const clientId = normalizeText_(input.client_id);
+  const analysisId = normalizeText_(input.analysis_id) || Utilities.getUuid();
+  const caseRow = readDataObjects_(DATA_SHEETS.insolvencyCases)
+    .find((row) => String(row.case_id || '') === caseId);
+  if (!caseRow || caseRow.project_id !== context.projectId || caseRow.client_id !== clientId) {
+    throw new Error('Řízení pro uložení AI analýzy nebylo v projektu nalezeno.');
+  }
+
+  const result = input.result && typeof input.result === 'object' ? input.result : {};
+  const caseStudy = normalizeText_(result.case_study).slice(0, 45000);
+  const summary = Object.assign({}, result);
+  delete summary.case_study;
+  const resultJson = JSON.stringify(summary);
+  if (resultJson.length > 45000) {
+    throw new Error('AI analýza je příliš rozsáhlá pro bezpečné uložení.');
+  }
+  const documentIds = Array.isArray(input.document_ids)
+    ? input.document_ids.map(normalizeText_).filter(Boolean)
+    : [];
+  const timestamp = nowIso_();
+  const row = {
+    analysis_id: analysisId,
+    case_id: caseId,
+    project_id: context.projectId,
+    client_id: clientId,
+    kind: normalizeText_(input.kind) || 'CASE_DOCUMENT_ANALYSIS',
+    document_ids_json: JSON.stringify(documentIds),
+    result_json: resultJson,
+    model: normalizeText_(input.model) || 'gemini-2.5-flash',
+    created_at: normalizeText_(input.created_at) || timestamp,
+    created_by: context.actorId,
+    updated_at: timestamp,
+    updated_by: context.actorId
+  };
+  upsertDataObject_(DATA_SHEETS.insolvencyAnalyses, 'analysis_id', analysisId, row);
+
+  const finance = summary.finances && typeof summary.finances === 'object' ? summary.finances : {};
+  updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
+    claims_count: Number(finance.reviewed_claims_count) || caseRow.claims_count || 0,
+    claims_total_amount: Number(finance.claims_total_amount) || caseRow.claims_total_amount || '',
+    ai_status: 'OK',
+    ai_model: row.model,
+    ai_checked_at: timestamp,
+    ai_summary_json: resultJson,
+    ai_case_study: caseStudy,
+    ai_case_study_at: timestamp,
+    updated_at: timestamp,
+    updated_by: context.actorId
+  }));
+
+  const documentSummaries = Array.isArray(summary.document_summaries)
+    ? summary.document_summaries
+    : [];
+  documentSummaries.forEach((documentSummary) => {
+    const documentId = normalizeText_(documentSummary.document_id);
+    const documentRow = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
+      .find((item) => String(item.document_id || '') === documentId);
+    if (!documentRow || documentRow.case_id !== caseId) return;
+    updateDataObjectAtRow_(DATA_SHEETS.insolvencyDocuments, documentRow.__rowNumber, Object.assign({}, documentRow, {
+      included_in_case_study: 'Ano',
+      analysis_status: 'OK',
+      analysis_json: JSON.stringify(documentSummary).slice(0, 45000),
+      analysis_at: timestamp,
+      is_new: 'Ne',
+      updated_at: timestamp,
+      updated_by: context.actorId
+    }));
+  });
+
+  writeAudit_(context, 'SAVE_ISIR_ANALYSIS', 'ISIR_CASE', caseId, 'OK',
+    'documents=' + documentIds.length + ';model=' + row.model);
+  return {
+    analysis: row,
+    case: listInsolvencyCases_(context.projectId).find((item) => item.case_id === caseId),
+    documents: listInsolvencyDocuments_(context.projectId).filter((item) => item.case_id === caseId)
+  };
+}
+
+function markIsirDocumentsSeen_(caseIdInput, context) {
+  const caseId = normalizeText_(caseIdInput);
+  const caseRow = readDataObjects_(DATA_SHEETS.insolvencyCases)
+    .find((row) => String(row.case_id || '') === caseId);
+  if (!caseRow || caseRow.project_id !== context.projectId) {
+    throw new Error('Řízení nebylo v projektu nalezeno.');
+  }
+  const timestamp = nowIso_();
+  const updated = [];
+  readDataObjects_(DATA_SHEETS.insolvencyDocuments)
+    .filter((row) => row.case_id === caseId && row.project_id === context.projectId)
+    .forEach((row) => {
+      const value = Object.assign({}, row, {
+        is_new: 'Ne',
+        updated_at: timestamp,
+        updated_by: context.actorId
+      });
+      delete value.__rowNumber;
+      updateDataObjectAtRow_(DATA_SHEETS.insolvencyDocuments, row.__rowNumber, value);
+      updated.push(value);
+    });
+  return updated;
 }
 
 function escapeXmlText_(value) {
