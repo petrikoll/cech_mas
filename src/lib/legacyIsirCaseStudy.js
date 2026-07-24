@@ -84,3 +84,27 @@ export const parseLegacyIsirCaseStudy = (value) => {
 
   return result;
 };
+
+const caseStudyCompletenessScore = (value) => {
+  const source = String(value || '').trim();
+  if (!source) return 0;
+
+  const sectionCount = (source.match(/\[\[SECTION:(?:current|history):/g) || []).length;
+  const headingCount = [
+    'Stav nyní',
+    'Nejbližší termíny',
+    'Co ověřit',
+    'Co má udělat klient',
+    'Finance a pohledávky',
+    'Vyhodnocení oddlužení',
+    'Nejistoty pro aktuální práci',
+    'Časová osa'
+  ].filter((heading) => source.includes(heading)).length;
+
+  return (sectionCount * 100000) + (headingCount * 10000) + source.length;
+};
+
+export const selectMostCompleteCaseStudy = (...values) => values
+  .map((value) => String(value || '').trim())
+  .filter(Boolean)
+  .sort((left, right) => caseStudyCompletenessScore(right) - caseStudyCompletenessScore(left))[0] || '';

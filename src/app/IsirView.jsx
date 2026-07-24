@@ -25,7 +25,10 @@ import {
   UploadCloud,
   X
 } from 'lucide-react';
-import { parseLegacyIsirCaseStudy } from '../lib/legacyIsirCaseStudy.js';
+import {
+  parseLegacyIsirCaseStudy,
+  selectMostCompleteCaseStudy
+} from '../lib/legacyIsirCaseStudy.js';
 
 const formatDate = (value, withTime = false) => {
   const text = String(value || '');
@@ -242,7 +245,10 @@ export default function IsirView({
   const dataVerification = selectedVerificationResult.data_verification || {};
   const parsedAnalysisResult = selectedAnalysis?.result
     || safeParse(selectedAnalysis?.result_json || selectedCase?.ai_summary_json, {});
-  const legacyCaseStudy = parsedAnalysisResult.case_study || selectedCase?.ai_case_study || '';
+  const legacyCaseStudy = selectMostCompleteCaseStudy(
+    parsedAnalysisResult.case_study,
+    selectedCase?.ai_case_study
+  );
   const legacyCaseStudyResult = parseLegacyIsirCaseStudy(legacyCaseStudy);
   const analysisResult = {
     ...parsedAnalysisResult,

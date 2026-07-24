@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseLegacyIsirCaseStudy } from '../src/lib/legacyIsirCaseStudy.js';
+import {
+  parseLegacyIsirCaseStudy,
+  selectMostCompleteCaseStudy
+} from '../src/lib/legacyIsirCaseStudy.js';
 
 test('přenese původní sekce kazuistiky do polí používaných detailem klienta', () => {
   const source = `[[SECTION:current:Aktuální stav a co řešit]]
@@ -50,4 +53,29 @@ Stručný vývoj:
 
 test('běžný text bez původních značek ponechá beze změny', () => {
   assert.deepEqual(parseLegacyIsirCaseStudy('Pouhý souhrn bez sekcí.'), {});
+});
+
+test('úplná uložená kazuistika má přednost před později načteným krátkým souhrnem', () => {
+  const shortSummary = 'Zpráva pro oddlužení a soupis majetkové podstaty.';
+  const completeCaseStudy = [
+    '[[SECTION:current:Aktuální stav a co řešit]]',
+    'Stav nyní:',
+    'Úplný popis aktuální situace klienta.',
+    'Nejbližší termíny:',
+    '- 29. 7. 2026 – kontrolní termín',
+    'Co ověřit / řešit s klientem:',
+    '- Ověřit podklady.',
+    'Co má udělat klient:',
+    '- Dodat podklady.',
+    'Finance a pohledávky:',
+    '- Přezkoumáno osm přihlášek.',
+    '[[SECTION:history:Vývoj řízení]]',
+    'Časová osa:',
+    '- 15. 3. 2026 – zahájení řízení'
+  ].join('\n');
+
+  assert.equal(
+    selectMostCompleteCaseStudy(shortSummary, completeCaseStudy),
+    completeCaseStudy
+  );
 });
