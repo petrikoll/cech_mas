@@ -63,6 +63,7 @@ this.__backendTest = {
   normalizePaymentMonth_,
   addPaymentMonths_,
   buildPaymentSchedule_,
+  normalizeLegacyPaymentBirthDate_,
   isIsirEntryOnOrAfter_
 };`, context);
 
@@ -355,6 +356,16 @@ test('splátkový kalendář lze bezpečně skrýt s auditní stopou', () => {
   assert.match(source, /status: 'DELETED'/);
   assert.match(source, /String\(row\.status \|\| ''\)\.toUpperCase\(\) !== 'DELETED'/);
   assert.match(source, /writeAudit_\(context, 'DELETE', 'PAYMENT_PLAN'/);
+});
+
+test('staré splátkové kalendáře lze idempotentně převést podle identity klienta', () => {
+  assert.equal(backend.normalizeLegacyPaymentBirthDate_('6/3/1996'), '1996-06-03');
+  assert.equal(backend.normalizeLegacyPaymentBirthDate_('15.10.1987'), '1987-10-15');
+  assert.match(source, /function importLegacyPaymentPlans_/);
+  assert.match(source, /Přehled splátkových kalendářů/);
+  assert.match(source, /existingKeys\.has\(key\)/);
+  assert.match(source, /LEGACY_PAYMENT_SHEET/);
+  assert.match(source, /installmentStatuses\[month\] = 'PAID'/);
 });
 
 test('zakládání složky kopíruje kompletní sadu a používá projektové šablony', () => {

@@ -65,6 +65,191 @@ function listPaymentPlans_(projectId) {
     });
 }
 
+function normalizeLegacyPaymentIdentity_(value) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]/g, '')
+    .toLowerCase();
+}
+
+function parseLegacyPaymentAmount_(value) {
+  const normalized = String(value || '')
+    .replace(/\u00a0/g, '')
+    .replace(/\s+/g, '')
+    .replace(/kč/gi, '')
+    .replace(',', '.')
+    .replace(/[^0-9.-]/g, '');
+  const amount = Number(normalized);
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0;
+}
+
+function normalizeLegacyPaymentBirthDate_(value) {
+  const text = String(value || '').trim();
+  const usMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (usMatch) {
+    return usMatch[3] + '-' + String(Number(usMatch[1])).padStart(2, '0') + '-' +
+      String(Number(usMatch[2])).padStart(2, '0');
+  }
+  return safeNormalizeDate_(value);
+}
+
+function buildLegacyPaymentPlanKey_(value) {
+  return [
+    Number(value.client_number),
+    normalizeLegacyPaymentIdentity_(value.creditor_type),
+    Number(value.debt_amount),
+    normalizePaymentMonth_(value.first_payment_month),
+    Number(value.planned_installments)
+  ].join('|');
+}
+
+function importLegacyPaymentPlans_() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const sourceSheetName = 'Přehled splátkových kalendářů';
+    const sourceSheet = getRegistrySpreadsheet_().getSheetByName(sourceSheetName);
+    if (!sourceSheet) throw new Error('Zdrojový list splátkových kalendářů nebyl nalezen.');
+
+    const sourceValues = sourceSheet.getDataRange().getDisplayValues();
+    if (sourceValues.length < 2) {
+      return { imported: 0, skipped: 0, errors: [], totalSourceRows: 0 };
+    }
+
+    const registryClients = getRegistryRows_()
+      .map((row) => ({
+        projectId: normalizeProjectId_(row[REGISTRY_COLUMN.projectId]),
+        firstName: normalizeText_(row[REGISTRY_COLUMN.firstName]),
+        lastName: normalizeText_(row[REGISTRY_COLUMN.lastName]),
+        birthDate: safeNormalizeDate_(row[REGISTRY_COLUMN.birthDate]),
+        clientNumber: Number(row[REGISTRY_COLUMN.clientNumber])
+      }))
+      .filter((client) =>
+        client.projectId &&
+        Number.isInteger(client.clientNumber) &&
+        client.firstName &&
+        client.lastName &&
+        client.birthDate
+      );
+
+    const monthHeaders = sourceValues[0].slice(11, 39);
+    const existingKeys = new Set(
+      readDataObjects_(DATA_SHEETS.paymentPlans)
+        .filter((row) => String(row.status || '').toUpperCase() !== 'DELETED')
+        .map((row) => buildLegacyPaymentPlanKey_(row))
+    );
+    const timestamp = nowIso_();
+    const result = {
+      imported: 0,
+      skipped: 0,
+      errors: [],
+      totalSourceRows: 0,
+      projects: { CECH: 0, MAS: 0 }
+    };
+
+    sourceValues.slice(1).forEach((row, rowIndex) => {
+      const firstName = normalizeText_(row[1]);
+      const lastName = normalizeText_(row[2]);
+      const birthDate = normalizeLegacyPaymentBirthDate_(row[3]);
+      const rawDebtAmount = row[4];
+      const rawFirstPaymentMonth = row[5];
+      const rawPlannedInstallments = row[6];
+      const creditorType = normalizeText_(row[7]);
+      if (!firstName && !lastName && !birthDate && !rawDebtAmount) return;
+      result.totalSourceRows += 1;
+
+      try {
+        const debtAmount = parseLegacyPaymentAmount_(rawDebtAmount);
+        const firstPaymentMonth = normalizePaymentMonth_(rawFirstPaymentMonth);
+        const plannedInstallments = Number(String(rawPlannedInstallments || '').trim());
+        if (!birthDate || !debtAmount || !firstPaymentMonth ||
+            !Number.isInteger(plannedInstallments) || plannedInstallments < 1 ||
+            !creditorType) {
+          throw new Error('Neúplné nebo neplatné údaje kalendáře.');
+        }
+
+        const birthMatches = registryClients.filter((client) => client.birthDate === birthDate);
+        const exactMatches = birthMatches.filter((client) =>
+          normalizeLegacyPaymentIdentity_(client.firstName) === normalizeLegacyPaymentIdentity_(firstName) &&
+          normalizeLegacyPaymentIdentity_(client.lastName) === normalizeLegacyPaymentIdentity_(lastName)
+        );
+        const client = exactMatches.length === 1
+          ? exactMatches[0]
+          : birthMatches.length === 1
+            ? birthMatches[0]
+            : null;
+        if (!client) throw new Error('Klienta se nepodařilo jednoznačně spárovat.');
+
+        const clientIndex = getClientIndexByNumber_(client.clientNumber);
+        if (!clientIndex) throw new Error('Klient chybí v aplikačním indexu.');
+        if (requireProjectId_(clientIndex.project_id) !== client.projectId) {
+          throw new Error('Projekt klienta nesouhlasí s aplikačním indexem.');
+        }
+
+        const schedule = buildPaymentSchedule_(firstPaymentMonth, plannedInstallments);
+        const scheduleSet = new Set(schedule);
+        const installmentStatuses = {};
+        let status = 'ACTIVE';
+        monthHeaders.forEach((header, monthIndex) => {
+          const month = normalizePaymentMonth_(header);
+          if (!month || !scheduleSet.has(month)) return;
+          const marker = String(row[11 + monthIndex] || '').trim().toUpperCase();
+          if (marker.includes('END✓')) status = 'COMPLETED';
+          else if (marker.includes('END✗')) status = 'FAILED';
+          else if (marker.includes('✓')) installmentStatuses[month] = 'PAID';
+          else if (marker.includes('✗') || marker === 'X') installmentStatuses[month] = 'MISSED';
+        });
+
+        const value = {
+          plan_id: uuid_(),
+          project_id: client.projectId,
+          client_id: String(clientIndex.client_id || ''),
+          client_number: client.clientNumber,
+          creditor_type: creditorType,
+          debt_amount: debtAmount,
+          first_payment_month: firstPaymentMonth,
+          planned_installments: plannedInstallments,
+          planned_end_month: schedule[schedule.length - 1],
+          average_payment: Math.round((debtAmount / plannedInstallments) * 100) / 100,
+          status: status,
+          installment_statuses_json: JSON.stringify(installmentStatuses),
+          notes: 'Importováno z původního listu „' + sourceSheetName + '“, řádek ' + (rowIndex + 2) + '.',
+          source_system: 'LEGACY_PAYMENT_SHEET',
+          created_at: timestamp,
+          created_by: 'SYSTEM_LEGACY_IMPORT',
+          updated_at: timestamp,
+          updated_by: 'SYSTEM_LEGACY_IMPORT'
+        };
+        const key = buildLegacyPaymentPlanKey_(value);
+        if (existingKeys.has(key)) {
+          result.skipped += 1;
+          return;
+        }
+
+        appendDataObject_(DATA_SHEETS.paymentPlans, value);
+        existingKeys.add(key);
+        result.imported += 1;
+        result.projects[client.projectId] += 1;
+      } catch (error) {
+        result.errors.push({
+          row: rowIndex + 2,
+          client: [firstName, lastName].filter(Boolean).join(' '),
+          error: error.message
+        });
+      }
+    });
+
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function importLegacyPaymentPlans() {
+  return importLegacyPaymentPlans_();
+}
+
 function savePaymentPlan_(input, context) {
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);

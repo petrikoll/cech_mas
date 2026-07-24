@@ -1200,77 +1200,77 @@ function buildPlanTemplatePayload(client, draft, generatedText) {
 
 const VIEW_THEMES = {
   clients: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#f7dfb9_0,#f3ead9_32%,#eee7d8_58%,#e8edf0_100%)]',
-    header: 'border-amber-200 bg-amber-50/90',
-    accent: 'bg-amber-300/25',
-    label: 'text-amber-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#fffbeb_0,#fffdf7_30%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-amber-100/80 bg-white/90',
+    accent: 'bg-amber-100/25',
+    label: 'text-amber-600'
   },
   ka02: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#d7f2df_0,#eef4dc_36%,#edf2e6_62%,#e8eef0_100%)]',
-    header: 'border-emerald-200 bg-emerald-50/85',
-    accent: 'bg-emerald-300/25',
-    label: 'text-emerald-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#ecfdf5_0,#f7fdf9_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-emerald-100/80 bg-white/90',
+    accent: 'bg-emerald-100/25',
+    label: 'text-emerald-600'
   },
   ka2case: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#dbeafe_0,#eaf2f8_36%,#edf2f4_62%,#e8edf0_100%)]',
-    header: 'border-blue-200 bg-blue-50/85',
-    accent: 'bg-blue-300/25',
-    label: 'text-blue-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#eff6ff_0,#f8fbff_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-blue-100/80 bg-white/90',
+    accent: 'bg-blue-100/25',
+    label: 'text-blue-600'
   },
   ka01: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#eadff5_0,#f1ebf5_36%,#eeeaf1_62%,#e9edf0_100%)]',
-    header: 'border-violet-200 bg-violet-50/85',
-    accent: 'bg-violet-300/20',
-    label: 'text-violet-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#f5f3ff_0,#fbfaff_34%,#fcfdff_68%,#ffffff_100%)]',
+    header: 'border-violet-100/80 bg-white/90',
+    accent: 'bg-violet-100/25',
+    label: 'text-violet-600'
   },
   education: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#fef3c7_0,#f5ead2_36%,#eee8dc_62%,#e8edf0_100%)]',
-    header: 'border-amber-200 bg-amber-50/85',
-    accent: 'bg-amber-300/20',
-    label: 'text-amber-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#fffbeb_0,#fffdf7_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-amber-100/80 bg-white/90',
+    accent: 'bg-amber-100/25',
+    label: 'text-amber-600'
   },
   ka03: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#ffd7ba_0,#f7e5d2_34%,#eee4d8_62%,#e8edf1_100%)]',
-    header: 'border-orange-200 bg-orange-50/85',
-    accent: 'bg-orange-300/25',
-    label: 'text-orange-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#fff7ed_0,#fffcf8_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-orange-100/80 bg-white/90',
+    accent: 'bg-orange-100/25',
+    label: 'text-orange-600'
   },
   dashboard: {
-    page: 'bg-[radial-gradient(circle_at_top_left,#e2e8f0_0,#edf1f4_36%,#f1eee8_66%,#ebe8e3_100%)]',
-    header: 'border-slate-300 bg-slate-100/90',
-    accent: 'bg-slate-400/15',
-    label: 'text-slate-700'
+    page: 'bg-[radial-gradient(circle_at_top_left,#f1f5f9_0,#f8fafc_32%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-slate-100 bg-white/90',
+    accent: 'bg-slate-100/35',
+    label: 'text-slate-600'
   }
 };
 
 const NAV_THEMES = {
   clients: {
-    active: 'border-amber-300 bg-amber-600 text-white shadow-sm shadow-amber-200/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800'
+    active: 'border-amber-200 bg-amber-50 text-amber-800 shadow-[0_8px_18px_-14px_rgba(217,119,6,0.75)] ring-1 ring-amber-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   },
   ka02: {
-    active: 'border-emerald-300 bg-emerald-600 text-white shadow-sm shadow-emerald-200/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-800'
+    active: 'border-emerald-200 bg-emerald-50 text-emerald-800 shadow-[0_8px_18px_-14px_rgba(5,150,105,0.7)] ring-1 ring-emerald-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   },
   ka2case: {
-    active: 'border-blue-300 bg-blue-600 text-white shadow-sm shadow-blue-200/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800'
+    active: 'border-blue-200 bg-blue-50 text-blue-800 shadow-[0_8px_18px_-14px_rgba(37,99,235,0.7)] ring-1 ring-blue-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   },
   ka01: {
-    active: 'border-violet-300 bg-violet-600 text-white shadow-sm shadow-violet-200/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-800'
+    active: 'border-violet-200 bg-violet-50 text-violet-800 shadow-[0_8px_18px_-14px_rgba(124,58,237,0.7)] ring-1 ring-violet-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   },
   education: {
-    active: 'border-amber-300 bg-amber-600 text-white shadow-sm shadow-amber-200/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800'
+    active: 'border-amber-200 bg-amber-50 text-amber-800 shadow-[0_8px_18px_-14px_rgba(217,119,6,0.7)] ring-1 ring-amber-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   },
   dashboard: {
-    active: 'border-slate-400 bg-slate-700 text-white shadow-sm shadow-slate-300/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-slate-400 hover:bg-slate-100 hover:text-slate-800'
+    active: 'border-slate-200 bg-white text-slate-900 shadow-[0_8px_18px_-14px_rgba(15,23,42,0.6)] ring-1 ring-slate-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   },
   statistics: {
-    active: 'border-cyan-300 bg-cyan-700 text-white shadow-sm shadow-cyan-200/70',
-    idle: 'border-stone-200 bg-white/80 text-stone-600 hover:border-cyan-300 hover:bg-cyan-50 hover:text-cyan-800'
+    active: 'border-cyan-200 bg-cyan-50 text-cyan-800 shadow-[0_8px_18px_-14px_rgba(8,145,178,0.7)] ring-1 ring-cyan-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
   }
 };
 
@@ -4171,7 +4171,14 @@ function App() {
       action = 'deletePaymentPlan';
     }
     if (action) {
-      await postGoogleSheetAction({ action, id: record.id });
+      try {
+        await postGoogleSheetAction({ action, id: record.id });
+      } catch (error) {
+        const isStaleLocalPaymentPlan =
+          record.entityType === 'payment_plan' &&
+          /nebyl nalezen|not found/i.test(String(error?.message || ''));
+        if (!isStaleLocalPaymentPlan) throw error;
+      }
       if (action === 'deletePerformance') await refreshStatisticsRows();
     }
   };
@@ -6655,9 +6662,9 @@ ${rawPlanOutput}` }] }],
 
   return (
     <div className={`relative min-h-screen overflow-hidden text-slate-800 transition-colors duration-500 ${activeProject.theme.page || viewTheme.page}`}>
-      <div className={`pointer-events-none absolute -left-24 top-32 h-72 w-72 rounded-full blur-3xl ${activeProject.theme.ambient || viewTheme.accent}`} />
-      <div className="pointer-events-none absolute right-[-8rem] top-[22rem] h-96 w-96 rounded-full bg-white/35 blur-3xl" />
-      <header className={`sticky top-0 z-10 border-b shadow-sm shadow-black/5 backdrop-blur-xl transition-colors duration-500 ${activeProject.theme.header || viewTheme.header}`}>
+      <div className={`pointer-events-none absolute -left-32 top-40 h-80 w-80 rounded-full blur-3xl ${activeProject.theme.ambient || viewTheme.accent}`} />
+      <div className="pointer-events-none absolute right-[-10rem] top-[28rem] h-96 w-96 rounded-full bg-white/55 blur-3xl" />
+      <header className={`sticky top-0 z-10 border-b shadow-[0_10px_30px_-28px_rgba(15,23,42,0.38)] backdrop-blur-2xl transition-colors duration-500 ${activeProject.theme.header || viewTheme.header}`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:px-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div>
@@ -6742,7 +6749,7 @@ ${rawPlanOutput}` }] }],
                   id="global-worker-select"
                   value={globalWorker || WORKERS[0]}
                   onChange={(event) => setGlobalWorker(event.target.value)}
-                  className="h-11 min-w-[220px] rounded-lg border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                  className="h-12 min-w-[220px] rounded-xl border border-white bg-white/90 px-3 text-sm font-semibold text-slate-700 shadow-[0_8px_24px_-22px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.06] outline-none transition hover:border-slate-100 focus:border-indigo-200 focus:ring-4 focus:ring-indigo-100/60"
                   title="Vybraný pracovník se použije pro nové záznamy."
                 >
                   {WORKERS.map((worker) => (
@@ -6760,7 +6767,7 @@ ${rawPlanOutput}` }] }],
           </div>
 
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <nav className="flex flex-wrap gap-2">
+            <nav className="flex flex-wrap gap-1.5 rounded-2xl border border-white bg-white/55 p-1.5 shadow-[0_8px_24px_-22px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.045] backdrop-blur-sm">
               {APP_VIEWS.map((item) => {
                 const Icon = item.icon;
                 const active = mainView === item.id;
@@ -6769,7 +6776,7 @@ ${rawPlanOutput}` }] }],
                   <button
                     key={item.id}
                     onClick={() => switchMainView(item.id)}
-                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-colors ${
+                    className={`inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-semibold transition-all duration-200 ${
                       active
                         ? navTheme.active
                         : navTheme.idle
@@ -6791,7 +6798,7 @@ ${rawPlanOutput}` }] }],
         </div>
       </header>
 
-      <main className="relative z-[1] mx-auto max-w-7xl px-4 py-6 md:px-6">
+      <main className="relative z-[1] mx-auto max-w-7xl px-4 py-7 md:px-6 md:py-8">
         {firebaseAuthError && (
           <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
             {firebaseAuthError}
@@ -6804,7 +6811,7 @@ ${rawPlanOutput}` }] }],
         )}
 
         {mainView === 'clients' && (
-          <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="grid gap-5 lg:grid-cols-[290px_minmax(0,1fr)]">
             <div className="space-y-3">
               <Panel
                 title="Klientský registr"
@@ -6833,7 +6840,7 @@ ${rawPlanOutput}` }] }],
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
                       placeholder="Začněte psát příjmení..."
-                      className="h-9 w-full rounded-lg border border-slate-300 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+                      className="h-10 w-full rounded-xl border border-slate-200 bg-white/95 pl-9 pr-3 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.03)] outline-none transition hover:border-slate-300 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100/60"
                     />
                   </div>
                 </div>
@@ -6880,8 +6887,8 @@ ${rawPlanOutput}` }] }],
                           }}
                           className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
                             active
-                              ?'border-indigo-500 bg-indigo-100 shadow-md ring-2 ring-indigo-300'
-                              : 'border-slate-200 bg-white hover:border-indigo-200 hover:bg-slate-50'
+                              ?'border-indigo-200 bg-indigo-50/90 shadow-[0_10px_24px_-18px_rgba(79,70,229,0.55)] ring-2 ring-indigo-100'
+                              : 'border-slate-100 bg-white/90 shadow-[0_6px_20px_-20px_rgba(15,23,42,0.55)] hover:border-indigo-100 hover:bg-white hover:shadow-[0_10px_26px_-20px_rgba(15,23,42,0.45)]'
                           }`}
                         >
                           <div className="flex w-full items-start justify-between gap-2 text-left">

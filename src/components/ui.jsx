@@ -52,11 +52,11 @@ const FieldLabel = ({ label, help }) => (
 
 
 const Panel = ({ title, description, icon: Icon, action, children, className = '', help, titleClassName = '' }) => (
-  <section className={`rounded-2xl border border-slate-500 bg-slate-300 p-4 shadow-sm ${className}`}>
+  <section className={`rounded-3xl border border-white/90 bg-white/90 p-4 shadow-[0_12px_40px_-28px_rgba(15,23,42,0.38)] ring-1 ring-slate-900/[0.045] backdrop-blur-sm sm:p-5 ${className}`}>
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
         {Icon && (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-indigo-100/80 bg-indigo-50/80 text-indigo-600">
             <Icon className="h-5 w-5" />
           </div>
         )}
@@ -90,7 +90,7 @@ const TopMetric = ({ label, value, icon: Icon, tone }) => {
 };
 
 const InfoCard = ({ icon: Icon, label, value }) => (
-  <div className="rounded-xl border border-slate-200 bg-white p-3">
+  <div className="rounded-2xl border border-slate-100 bg-white/90 p-3.5 shadow-[0_8px_24px_-22px_rgba(15,23,42,0.5)]">
     <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
       <Icon className="h-3.5 w-3.5" />
       {label}
@@ -100,7 +100,7 @@ const InfoCard = ({ icon: Icon, label, value }) => (
 );
 
 const DetailRow = ({ label, value }) => (
-  <div className="flex items-start justify-between gap-3 border-b border-slate-100 py-1.5 last:border-b-0">
+  <div className="flex items-start justify-between gap-3 border-b border-slate-100/80 py-2 last:border-b-0">
     <span className="text-slate-500">{label}</span>
     <span className="text-right font-medium text-slate-800">{value}</span>
   </div>
@@ -144,7 +144,7 @@ const StatCard = ({ title, current, target, ka }) => {
   const hasTarget = Number(target) > 0;
   const percent = hasTarget ? Math.min(100, Math.round((current / target) * 100)) : null;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-2xl border border-slate-100 bg-white/95 p-4 shadow-[0_10px_30px_-24px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.03]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-sm font-bold text-slate-900">{title}</div>
@@ -170,7 +170,7 @@ const StatCard = ({ title, current, target, ka }) => {
 };
 
 const LoadingCard = ({ text }) => (
-  <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-600">
+  <div className="flex items-center gap-3 rounded-2xl border border-slate-100 bg-white/90 p-3 text-sm text-slate-600 shadow-[0_8px_24px_-22px_rgba(15,23,42,0.45)]">
     <Loader2 className="h-4 w-4 animate-spin" />
     {text}
   </div>
@@ -196,7 +196,7 @@ const SaveInlineNotice = ({ notice }) => {
 };
 
 const EmptyState = ({ icon: Icon, title }) => (
-  <div className="rounded-xl border border-dashed border-slate-300 bg-white px-5 py-8 text-center">
+  <div className="rounded-2xl border border-dashed border-slate-200 bg-white/70 px-5 py-9 text-center">
     <Icon className="mx-auto h-8 w-8 text-slate-300" />
     <div className="mt-2 text-sm font-medium text-slate-500">{title}</div>
   </div>
@@ -232,7 +232,7 @@ const InputField = ({ label, value, onChange, type = 'text', placeholder = '', r
       max={max}
       step={step}
       onChange={(event) => onChange(event.target.value)}
-      className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)] outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100"
+      className="w-full rounded-xl border border-slate-200 bg-white/95 px-3 py-2.5 text-sm text-slate-800 shadow-[0_1px_2px_rgba(15,23,42,0.03)] outline-none transition hover:border-slate-300 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100/70"
     />
   </div>
 );
@@ -244,7 +244,7 @@ const SelectField = ({ label, value, onChange, options, help, disabled = false }
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)] outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 ${disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+      className={`w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.03)] outline-none transition hover:border-slate-300 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100/70 ${disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white/95 text-slate-800'}`}
     >
       {options.map((option) => (
         <option key={option.value} value={option.value}>
@@ -264,13 +264,13 @@ const TextAreaField = ({ label, value, onChange, rows = 4, placeholder = '', hel
       placeholder={placeholder}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
-      className={`w-full rounded-lg border border-slate-300 px-3 py-2 text-sm shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)] outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 ${disabled ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-white'}`}
+      className={`w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm shadow-[0_1px_2px_rgba(15,23,42,0.03)] outline-none transition hover:border-slate-300 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100/70 ${disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed' : 'bg-white/95 text-slate-800'}`}
     />
   </div>
 );
 
 const CheckboxField = ({ label, checked, onChange, compact = false, help }) => (
-  <label className={`flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700 ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
+  <label className={`flex items-center gap-2.5 rounded-xl border border-slate-100 bg-slate-50/60 text-sm font-medium text-slate-700 transition hover:border-slate-200 hover:bg-white ${compact ? 'px-3 py-2' : 'px-4 py-3'}`}>
     <input type="checkbox" checked={checked} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
     <span>{label}</span>
     <HelpIcon help={help} />

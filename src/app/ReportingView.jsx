@@ -33,7 +33,7 @@ const safePercent = (value) => Math.max(0, Math.min(100, Number(value) || 0));
 function SummaryCard({ label, accessibleLabel, value, icon: Icon, tone }) {
   const percent = safePercent(value);
   return (
-    <div aria-label={accessibleLabel || label} className="flex min-w-0 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div aria-label={accessibleLabel || label} className="flex min-w-0 items-center gap-4 rounded-2xl border border-white bg-white/95 p-4 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.045]">
       <div
         className="grid h-16 w-16 shrink-0 place-items-center rounded-full"
         style={{ background: `conic-gradient(${tone.ring} ${percent * 3.6}deg, #e2e8f0 0deg)` }}
@@ -52,7 +52,7 @@ function SummaryCard({ label, accessibleLabel, value, icon: Icon, tone }) {
 
 function MetricCard({ item, tone }) {
   return (
-    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <article className="rounded-2xl border border-white bg-white/95 p-5 shadow-[0_12px_32px_-26px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.045] transition hover:-translate-y-0.5 hover:shadow-[0_18px_40px_-28px_rgba(15,23,42,0.48)]">
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Indikátor</div>
@@ -78,7 +78,7 @@ function MetricCard({ item, tone }) {
 
 function GoalCard({ item, tone }) {
   return (
-    <article className={`rounded-xl border p-4 ${tone.soft}`}>
+    <article className={`rounded-2xl border p-4 transition hover:bg-white ${tone.soft}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -134,7 +134,7 @@ function ReportingView({
     : '';
   return (
     <div className="space-y-5">
-      <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm sm:p-6">
+      <section className="rounded-3xl border border-white bg-white/70 p-4 shadow-[0_16px_44px_-32px_rgba(15,23,42,0.42)] ring-1 ring-slate-900/[0.045] backdrop-blur-sm sm:p-6">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -150,7 +150,7 @@ function ReportingView({
             type="button"
             onClick={handleVerifyProjectInsolvencies}
             disabled={isVerifyingProjectInsolvencies}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-extrabold transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60 ${tone.badge}`}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl border bg-white/75 px-4 py-3 text-sm font-extrabold shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-wait disabled:opacity-60 ${tone.badge}`}
           >
             {isVerifyingProjectInsolvencies
               ? <Loader2 className="h-5 w-5 animate-spin" />
@@ -181,7 +181,7 @@ function ReportingView({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+      <section className="rounded-3xl border border-white bg-white/80 p-4 shadow-[0_14px_38px_-30px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.045] sm:p-5">
         <div className="mb-4 flex items-center gap-2">
           <Target className="h-5 w-5 text-slate-500" />
           <h2 className="text-lg font-black text-slate-950">Plnění cílů</h2>

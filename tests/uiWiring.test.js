@@ -75,6 +75,12 @@ test('přehled klienta v KA1 přepíná výkony a splátkové kalendáře', () =
   assert.match(appSource, /action = 'deletePaymentPlan'/);
 });
 
+test('lokální osiřelý splátkový kalendář lze odstranit i po chybě backendu nenalezeno', () => {
+  assert.match(appSource, /isStaleLocalPaymentPlan/);
+  assert.match(appSource, /nebyl nalezen\|not found/);
+  assert.match(appSource, /if \(!isStaleLocalPaymentPlan\) throw error/);
+});
+
 test('poslední výkony zobrazují význam, ne pouze kódy činností', () => {
   assert.match(ka1PerformanceSource, /KA1_ACTIVITY_TITLE_BY_CODE/);
   assert.match(ka1PerformanceSource, /preview\.activityTitles\.join/);
@@ -107,8 +113,8 @@ test('projekty CECH a MAS mají velký přepínač a odlišné barevné pozadí'
   assert.match(projectSwitcherSource, /text-lg font-black/);
   assert.match(appSource, /activeProject\.theme\.page \|\| viewTheme\.page/);
   assert.match(appSource, /activeProject\.theme\.header \|\| viewTheme\.header/);
-  assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#c7d2fe/);
-  assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#bbf7d0/);
+  assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#eef2ff/);
+  assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#ecfdf5/);
 });
 
 test('dashboard sleduje jen smluvené indikátory a projektové cíle', () => {

@@ -14,13 +14,13 @@ const PROJECTS = Object.freeze({
     startDate: '2026-03-01',
     endDate: '2028-06-30',
     theme: Object.freeze({
-      active: 'border-indigo-800 bg-indigo-700 text-white shadow-md shadow-indigo-300/60',
-      idle: 'border-indigo-300 bg-white/90 text-indigo-950 hover:bg-indigo-100',
-      badge: 'border-indigo-300 bg-indigo-100 text-indigo-900',
-      page: 'bg-[radial-gradient(circle_at_top_left,#c7d2fe_0,#dbeafe_34%,#e8eef8_64%,#eef2f7_100%)]',
-      header: 'border-indigo-300 bg-indigo-50/90',
-      ambient: 'bg-indigo-400/25',
-      label: 'text-indigo-800'
+      active: 'border-indigo-200 bg-indigo-600 text-white shadow-[0_10px_24px_-14px_rgba(79,70,229,0.8)]',
+      idle: 'border-transparent bg-transparent text-slate-500 hover:border-indigo-100 hover:bg-indigo-50/70 hover:text-indigo-800',
+      badge: 'border-indigo-100 bg-indigo-50/80 text-indigo-700',
+      page: 'bg-[radial-gradient(circle_at_top_left,#eef2ff_0,#f8faff_32%,#fbfdff_68%,#ffffff_100%)]',
+      header: 'border-indigo-100/80 bg-white/90',
+      ambient: 'bg-indigo-200/20',
+      label: 'text-indigo-600'
     })
   }),
   [PROJECT_IDS.MAS]: Object.freeze({
@@ -33,13 +33,13 @@ const PROJECTS = Object.freeze({
     startDate: '2026-03-01',
     endDate: '2028-02-29',
     theme: Object.freeze({
-      active: 'border-emerald-800 bg-emerald-700 text-white shadow-md shadow-emerald-300/60',
-      idle: 'border-emerald-300 bg-white/90 text-emerald-950 hover:bg-emerald-100',
-      badge: 'border-emerald-300 bg-emerald-100 text-emerald-900',
-      page: 'bg-[radial-gradient(circle_at_top_left,#bbf7d0_0,#d1fae5_34%,#e3f3e9_64%,#edf5f0_100%)]',
-      header: 'border-emerald-300 bg-emerald-50/90',
-      ambient: 'bg-emerald-400/25',
-      label: 'text-emerald-800'
+      active: 'border-emerald-200 bg-emerald-600 text-white shadow-[0_10px_24px_-14px_rgba(5,150,105,0.75)]',
+      idle: 'border-transparent bg-transparent text-slate-500 hover:border-emerald-100 hover:bg-emerald-50/70 hover:text-emerald-800',
+      badge: 'border-emerald-100 bg-emerald-50/80 text-emerald-700',
+      page: 'bg-[radial-gradient(circle_at_top_left,#ecfdf5_0,#f7fdf9_32%,#fbfefc_68%,#ffffff_100%)]',
+      header: 'border-emerald-100/80 bg-white/90',
+      ambient: 'bg-emerald-200/20',
+      label: 'text-emerald-600'
     })
   })
 });
