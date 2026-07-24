@@ -1,6 +1,9 @@
 function normalizePaymentMonth_(value) {
+  if (Object.prototype.toString.call(value) === '[object Date]' && !Number.isNaN(value.getTime())) {
+    return Utilities.formatDate(value, BACKEND_CONFIG.timeZone, 'yyyy-MM');
+  }
   const text = String(value || '').trim();
-  let match = text.match(/^(\d{4})-(\d{1,2})$/);
+  let match = text.match(/^(\d{4})-(\d{1,2})(?:$|-\d{1,2}|T)/);
   if (match) {
     const month = Number(match[2]);
     if (month < 1 || month > 12) throw new Error('Neplatný měsíc splátky.');
@@ -95,11 +98,17 @@ function normalizeLegacyPaymentBirthDate_(value) {
 }
 
 function buildLegacyPaymentPlanKey_(value) {
+  let firstPaymentMonth = '';
+  try {
+    firstPaymentMonth = normalizePaymentMonth_(value.first_payment_month);
+  } catch (error) {
+    firstPaymentMonth = normalizeLegacyPaymentIdentity_(value.first_payment_month);
+  }
   return [
     Number(value.client_number),
     normalizeLegacyPaymentIdentity_(value.creditor_type),
     Number(value.debt_amount),
-    normalizePaymentMonth_(value.first_payment_month),
+    firstPaymentMonth,
     Number(value.planned_installments)
   ].join('|');
 }
@@ -134,15 +143,31 @@ function importLegacyPaymentPlans_() {
       );
 
     const monthHeaders = sourceValues[0].slice(11, 39);
-    const existingKeys = new Set(
-      readDataObjects_(DATA_SHEETS.paymentPlans)
-        .filter((row) => String(row.status || '').toUpperCase() !== 'DELETED')
-        .map((row) => buildLegacyPaymentPlanKey_(row))
-    );
+    const existingPlans = readDataObjects_(DATA_SHEETS.paymentPlans)
+      .filter((row) => String(row.status || '').toUpperCase() !== 'DELETED');
+    const existingKeys = new Set();
+    let deduplicated = 0;
+    existingPlans.forEach((row) => {
+      const key = buildLegacyPaymentPlanKey_(row);
+      const isLegacyImport = String(row.source_system || '') === 'LEGACY_PAYMENT_SHEET';
+      if (isLegacyImport && existingKeys.has(key)) {
+        const updated = Object.assign({}, row, {
+          status: 'DELETED',
+          updated_at: nowIso_(),
+          updated_by: 'SYSTEM_LEGACY_IMPORT_DEDUP'
+        });
+        delete updated.__rowNumber;
+        updateDataObjectAtRow_(DATA_SHEETS.paymentPlans, row.__rowNumber, updated);
+        deduplicated += 1;
+        return;
+      }
+      existingKeys.add(key);
+    });
     const timestamp = nowIso_();
     const result = {
       imported: 0,
       skipped: 0,
+      deduplicated: deduplicated,
       errors: [],
       totalSourceRows: 0,
       projects: { CECH: 0, MAS: 0 }
@@ -247,7 +272,9 @@ function importLegacyPaymentPlans_() {
 }
 
 function importLegacyPaymentPlans() {
-  return importLegacyPaymentPlans_();
+  const result = importLegacyPaymentPlans_();
+  console.log(JSON.stringify(result));
+  return result;
 }
 
 function savePaymentPlan_(input, context) {

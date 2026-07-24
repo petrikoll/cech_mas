@@ -342,6 +342,7 @@ test('klient dostane odkazy na celou projektovou dokumentaci', () => {
 test('backend splátkových kalendářů normalizuje měsíce a sestaví harmonogram', () => {
   assert.equal(backend.normalizePaymentMonth_('04/26'), '2026-04');
   assert.equal(backend.normalizePaymentMonth_('4/2026'), '2026-04');
+  assert.equal(backend.normalizePaymentMonth_('2026-04-01T00:00:00.000Z'), '2026-04');
   assert.equal(backend.addPaymentMonths_('2026-12', 1), '2027-01');
   assert.deepEqual(
     plain(backend.buildPaymentSchedule_('04/26', 3)),
@@ -364,8 +365,10 @@ test('staré splátkové kalendáře lze idempotentně převést podle identity 
   assert.match(source, /function importLegacyPaymentPlans_/);
   assert.match(source, /Přehled splátkových kalendářů/);
   assert.match(source, /existingKeys\.has\(key\)/);
+  assert.match(source, /firstPaymentMonth = normalizeLegacyPaymentIdentity_/);
   assert.match(source, /LEGACY_PAYMENT_SHEET/);
   assert.match(source, /installmentStatuses\[month\] = 'PAID'/);
+  assert.match(source, /SYSTEM_LEGACY_IMPORT_DEDUP/);
 });
 
 test('zakládání složky kopíruje kompletní sadu a používá projektové šablony', () => {

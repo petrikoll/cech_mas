@@ -5,6 +5,7 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleDocxExportRequest } from './docxExport.js';
 import { handleGoogleAppsScriptProxy } from './googleAppsScriptProxy.js';
+import { handleGeminiProxyRequest } from './geminiProxy.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const distDir = resolve(__dirname, 'dist');
@@ -100,6 +101,11 @@ const server = createServer((request, response) => {
 
   if (url.pathname === '/api/google-sheets') {
     void handleGoogleAppsScriptProxy(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/gemini') {
+    void handleGeminiProxyRequest(request, response);
     return;
   }
 

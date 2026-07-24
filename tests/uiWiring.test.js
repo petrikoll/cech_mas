@@ -22,6 +22,10 @@ const projectsSource = readFileSync(
   new URL('../src/config/projects.js', import.meta.url),
   'utf8'
 );
+const configSource = readFileSync(
+  new URL('../src/config/projectConfig.js', import.meta.url),
+  'utf8'
+);
 const reportingSource = readFileSync(
   new URL('../src/app/ReportingView.jsx', import.meta.url),
   'utf8'
@@ -131,4 +135,14 @@ test('dashboard spouští hromadnou kontrolu klientů v ISIR', () => {
   assert.match(reportingSource, /Hromadně ověřit klienty v ISIR/);
   assert.match(appSource, /verifyProjectInsolvencies/);
   assert.match(appSource, /isVerifyingProjectInsolvencies/);
+});
+
+test('hlavní navigace obsahuje přehled AI pomůcek se čtyřmi externími odkazy', () => {
+  assert.match(configSource, /AI Pom\\u016fcky/);
+  assert.match(appSource, /mainView === 'ai-tools'/);
+  assert.match(appSource, /https:\/\/chranenebydleni\.onrender\.com\//);
+  assert.match(appSource, /https:\/\/dokument-creator\.onrender\.com\//);
+  assert.match(appSource, /https:\/\/portal-040d\.onrender\.com\/elai-payslips\.html/);
+  assert.match(appSource, /https:\/\/kalkulacka1-3\.onrender\.com\//);
+  assert.match(appSource, /target="_blank"/);
 });

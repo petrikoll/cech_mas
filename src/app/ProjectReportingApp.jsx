@@ -101,6 +101,8 @@ import Ka02View from './Ka02View.jsx';
 import ProjectSwitcher from '../components/ProjectSwitcher.jsx';
 import { useProject } from '../context/ProjectContext.jsx';
 import sfLogoImage from '../assets/eu-spolufinancovano-logo.png';
+import cechBackgroundImage from '../assets/project-cech-background.webp';
+import masBackgroundImage from '../assets/project-mas-background.webp';
 import {
   buildAddress,
   buildAllRecordsBackupHtml,
@@ -139,6 +141,42 @@ import {
 const Ka01View = React.lazy(() => import('./Ka01View.jsx'));
 const Ka2CaseManagementView = React.lazy(() => import('./Ka2CaseManagementView.jsx'));
 const ReportingView = React.lazy(() => import('./ReportingView.jsx'));
+
+const PROJECT_BACKGROUND_IMAGES = Object.freeze({
+  CECH: cechBackgroundImage,
+  MAS: masBackgroundImage
+});
+
+const AI_TOOL_LINKS = Object.freeze([
+  {
+    title: 'Chráněné bydlení',
+    description: 'Otevře samostatnou pomůcku pro agendu chráněného bydlení.',
+    url: 'https://chranenebydleni.onrender.com/',
+    icon: Users,
+    tone: 'from-sky-50 to-white text-sky-700 border-sky-100'
+  },
+  {
+    title: 'Tvorba dokumentů',
+    description: 'Otevře samostatnou aplikaci pro přípravu dokumentů.',
+    url: 'https://dokument-creator.onrender.com/',
+    icon: FileText,
+    tone: 'from-violet-50 to-white text-violet-700 border-violet-100'
+  },
+  {
+    title: 'E.L.A.I. – výplatní pásky',
+    description: 'Otevře specializovanou pomůcku E.L.A.I. pro výplatní pásky.',
+    url: 'https://portal-040d.onrender.com/elai-payslips.html',
+    icon: Brain,
+    tone: 'from-emerald-50 to-white text-emerald-700 border-emerald-100'
+  },
+  {
+    title: 'Kalkulačka 1–3',
+    description: 'Otevře samostatnou výpočtovou pomůcku.',
+    url: 'https://kalkulacka1-3.onrender.com/',
+    icon: PieChart,
+    tone: 'from-amber-50 to-white text-amber-700 border-amber-100'
+  }
+]);
 
 const LazyViewFallback = () => (
   <LoadingCard text="Načítám modul..." />
@@ -203,6 +241,7 @@ const AI_MODEL_OPTIONS = [
   { value: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite' }
 ];
 const DEFAULT_AI_MODEL = 'gemini-2.5-flash';
+const SERVER_MANAGED_GEMINI_KEY_MARKER = 'server-managed';
 
 const KA01_ACTIVITY_AI_CONTEXT = [
   'Tvorba s\u00edt\u011b sleduje rozvoj a udr\u017eov\u00e1n\u00ed partnersk\u00e9 spolupr\u00e1ce na \u00fazem\u00ed aktivn\u00edho projektu.',
@@ -426,18 +465,22 @@ const KA2_NETWORK_SYSTEM_PROMPT = `${AI_SAFETY_BASE}
 Vytváříš projektový zápis aktivity KA2 – Tvorba sítě. Zápis se netýká individuální klientské podpory, ale rozvoje, koordinace, udržení nebo rozšíření partnerské sítě. Všechny obsahové informace čerpej z jediného vstupního pole Popis. Rozděl je do polí description, outcome a nextSteps. Nevymýšlej osoby, rozhodnutí, úkoly, odpovědnosti ani termíny. Pokud pro některé pole není ve vstupním Popisu podklad, vrať v něm text Neuvedeno. Vrať pouze JSON podle zadaného schématu.`;
 
 const fetchGemini = async (url, options) => {
-  const response = await fetch(url, options);
-  if (response.ok) return response;
-
   const modelMatch = String(url || '').match(/\/models\/([^/:]+):/);
   const primaryModel = modelMatch?.[1] || DEFAULT_AI_MODEL;
-  const fallbackModel = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || '';
-  if (!fallbackModel || fallbackModel === primaryModel || url.includes(`/models/${fallbackModel}:`)) return response;
+  const requestPayload = options?.body ? JSON.parse(options.body) : {};
+  const requestModel = (model) => fetch('/api/gemini', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, payload: requestPayload })
+  });
 
-  const fallbackUrl = url.replace(`/models/${primaryModel}:`, `/models/${fallbackModel}:`);
-  if (fallbackUrl === url) return response;
+  const response = await requestModel(primaryModel);
+  if (response.ok) return response;
+
+  const fallbackModel = import.meta.env.VITE_GEMINI_FALLBACK_MODEL || '';
+  if (!fallbackModel || fallbackModel === primaryModel) return response;
   console.warn(`Gemini model ${primaryModel} selhal, používám náhradní model ${fallbackModel}.`);
-  return fetch(fallbackUrl, options);
+  return requestModel(fallbackModel);
 };
 
 const buildSafeGeneratorUserPrompt = (config, client, fields) => {
@@ -1240,6 +1283,12 @@ const VIEW_THEMES = {
     header: 'border-slate-100 bg-white/90',
     accent: 'bg-slate-100/35',
     label: 'text-slate-600'
+  },
+  'ai-tools': {
+    page: 'bg-[radial-gradient(circle_at_top_left,#f5f3ff_0,#fbfaff_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-violet-100/80 bg-white/90',
+    accent: 'bg-violet-100/25',
+    label: 'text-violet-600'
   }
 };
 
@@ -1267,6 +1316,10 @@ const NAV_THEMES = {
   dashboard: {
     active: 'border-slate-200 bg-white text-slate-900 shadow-[0_8px_18px_-14px_rgba(15,23,42,0.6)] ring-1 ring-slate-100',
     idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
+  },
+  'ai-tools': {
+    active: 'border-violet-200 bg-violet-50 text-violet-800 shadow-[0_8px_18px_-14px_rgba(124,58,237,0.7)] ring-1 ring-violet-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-violet-100 hover:bg-violet-50/70 hover:text-violet-800'
   },
   statistics: {
     active: 'border-cyan-200 bg-cyan-50 text-cyan-800 shadow-[0_8px_18px_-14px_rgba(8,145,178,0.7)] ring-1 ring-cyan-100',
@@ -2624,7 +2677,7 @@ function App() {
   );
 
   const generateKa1PerformanceNote = async ({ draft, selectedClient: client, selectedPhase, records: timelineRecords }) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    const apiKey = SERVER_MANAGED_GEMINI_KEY_MARKER;
     if (!apiKey) {
       throw new Error('Gemini API klíč není nastavený. AI návrh nyní nelze vytvořit.');
     }
@@ -4476,7 +4529,7 @@ function App() {
     setIsGenerating(true);
     setAiGenerationStatus('loading');
     setGeneratedText('');
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    const apiKey = SERVER_MANAGED_GEMINI_KEY_MARKER;
     const aiModel = selectedAiModel || DEFAULT_AI_MODEL;
     setGenerationNotice(`Generuji text přes ${aiModel}...`);
     const maxOutputTokens = generatorDraft.selectedKey === 'therapy' ? 8192 : 4096;
@@ -5092,7 +5145,7 @@ ${rawOutput}` }] }],
       return ka01Draft;
     }
 
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    const apiKey = SERVER_MANAGED_GEMINI_KEY_MARKER;
     const aiModel = selectedAiModel || DEFAULT_AI_MODEL;
     if (!apiKey) {
       setFlash('AI korektura aktivity tvorby s\u00edt\u011b nen\u00ed dostupn\u00e1, proto\u017ee nen\u00ed nastaven\u00fd Gemini API kl\u00ed\u010d. Aktivita nebyla ulo\u017eena.');
@@ -6027,7 +6080,7 @@ ${rawOutput}` }] }],
     const aiTimeline = filterClientCaseAiRecords(clientJourneyTimeline);
     const aiSupportBreakdown = getClientSupportBreakdown(selectedClient.id, aiTimeline);
     const fallbackSummary = buildClientCaseSummary(selectedClient, aiTimeline, aiSupportBreakdown);
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    const apiKey = SERVER_MANAGED_GEMINI_KEY_MARKER;
     const aiModel = selectedAiModel || DEFAULT_AI_MODEL;
 
     if (!apiKey) {
@@ -6120,7 +6173,7 @@ ${rawOutput}` }] }],
   ].join('\n');
 
   const handleGenerateJourneyPlanDraft = async (record) => {
-    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    const apiKey = SERVER_MANAGED_GEMINI_KEY_MARKER;
     const aiModel = selectedAiModel || DEFAULT_AI_MODEL;
     if (!apiKey) {
       const fallbackRecord = buildPlanRecordWithStructuredDraft(record, buildStructuredPlanForAi(record), selectedClient);
@@ -6614,7 +6667,7 @@ ${rawPlanOutput}` }] }],
     let horizontalPrinciplesText = buildHorizontalPrinciplesFallbackText();
     let usedAi = false;
     try {
-      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+      const apiKey = SERVER_MANAGED_GEMINI_KEY_MARKER;
       if (apiKey) {
         const aiModel = selectedAiModel || DEFAULT_AI_MODEL;
         const response = await fetchGemini(`https://generativelanguage.googleapis.com/v1beta/models/${aiModel}:generateContent?key=${apiKey}`, {
@@ -6661,7 +6714,13 @@ ${rawPlanOutput}` }] }],
   const viewTheme = VIEW_THEMES[mainView] || VIEW_THEMES.clients;
 
   return (
-    <div className={`relative min-h-screen overflow-hidden text-slate-800 transition-colors duration-500 ${activeProject.theme.page || viewTheme.page}`}>
+    <div
+      className={`relative min-h-screen overflow-hidden bg-cover bg-center bg-no-repeat text-slate-800 transition-colors duration-500 ${activeProject.theme.page || viewTheme.page}`}
+      style={{
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.08), rgba(255,255,255,0.18)), url("${PROJECT_BACKGROUND_IMAGES[activeProject.id]}")`,
+        backgroundAttachment: 'fixed'
+      }}
+    >
       <div className={`pointer-events-none absolute -left-32 top-40 h-80 w-80 rounded-full blur-3xl ${activeProject.theme.ambient || viewTheme.accent}`} />
       <div className="pointer-events-none absolute right-[-10rem] top-[28rem] h-96 w-96 rounded-full bg-white/55 blur-3xl" />
       <header className={`sticky top-0 z-10 border-b shadow-[0_10px_30px_-28px_rgba(15,23,42,0.38)] backdrop-blur-2xl transition-colors duration-500 ${activeProject.theme.header || viewTheme.header}`}>
@@ -7820,6 +7879,55 @@ ${rawPlanOutput}` }] }],
             </Panel>
             <div aria-hidden="true" className="hidden xl:block" />
           </div>
+        )}
+
+        {mainView === 'ai-tools' && (
+          <section className="space-y-5">
+            <div className="rounded-3xl border border-white/90 bg-white/[0.88] p-6 shadow-[0_20px_60px_-46px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05] backdrop-blur-xl md:p-8">
+              <div className="flex items-start gap-4">
+                <div className="rounded-2xl bg-violet-50 p-3 text-violet-700 ring-1 ring-violet-100">
+                  <Sparkles className="h-6 w-6" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold tracking-tight text-slate-900">AI Pomůcky</h2>
+                  <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">
+                    Doplňkové aplikace jsou dostupné z jednoho místa. Každá pomůcka se otevře v nové kartě, takže rozepsaná práce ve výkaznictví zůstane zachovaná.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              {AI_TOOL_LINKS.map((tool) => {
+                const ToolIcon = tool.icon;
+                return (
+                  <article
+                    key={tool.url}
+                    className={`group rounded-3xl border bg-gradient-to-br p-6 shadow-[0_16px_44px_-36px_rgba(15,23,42,0.55)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_22px_50px_-36px_rgba(15,23,42,0.6)] ${tool.tone}`}
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-2xl bg-white/90 p-3 shadow-sm ring-1 ring-current/10">
+                        <ToolIcon className="h-6 w-6" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-lg font-bold text-slate-900">{tool.title}</h3>
+                        <p className="mt-1 min-h-10 text-sm leading-5 text-slate-600">{tool.description}</p>
+                        <a
+                          href={tool.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-slate-700 focus:outline-none focus:ring-4 focus:ring-violet-100"
+                        >
+                          Otevřít pomůcku
+                          <ChevronRight className="h-4 w-4" />
+                        </a>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
         )}
 
         {mainView === 'dashboard' && (

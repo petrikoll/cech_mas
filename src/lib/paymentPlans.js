@@ -12,8 +12,11 @@ export const PAYMENT_PLAN_STATUSES = Object.freeze({
 });
 
 export function normalizePaymentMonth(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+  }
   const text = String(value || '').trim();
-  let match = text.match(/^(\d{4})-(\d{1,2})$/);
+  let match = text.match(/^(\d{4})-(\d{1,2})(?:$|-\d{1,2}|T)/);
   if (match) {
     const month = Number(match[2]);
     return month >= 1 && month <= 12
