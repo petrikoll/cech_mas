@@ -118,7 +118,7 @@ export const isClaimApplicationDocument = (document) => {
 
 export const isStructuredIsirDocument = (document) => {
   const text = `${document?.title || ''} ${document?.document_type || ''}`.toLocaleLowerCase('cs');
-  return /(zpr[aá]va.*(p[řr]ezkum|pln[eě]n|spln[eě]n)|soupis.*p[řr]ihl[aá][šs]|p[řr]ezkumn|vy[uú][čc]tov[aá]n|odm[eě]n[a-y].*spr[aá]vc)/i.test(text);
+  return /(zpr[aá]va.*(p[řr]ezkum|oddlu[žz]en|pln[eě]n|spln[eě]n)|soupis.*(majet|p[řr]ihl[aá][šs])|seznam.*p[řr]ihl[aá][šs]|z[aá]znam.*jedn[aá]n[ií].*dlu[žz]n[ií]k|p[řr]ezkumn|vy[uú][čc]tov[aá]n|odm[eě]n[a-y].*spr[aá]vc)/i.test(text);
 };
 
 export const buildDocumentAnalysisPrompt = (document) => `${DOCUMENT_ANALYSIS_PROMPT}

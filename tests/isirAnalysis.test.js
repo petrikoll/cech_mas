@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  currentDateInPrague,
   minimizeSummary,
   normalizeIsirPdfUrl,
   normalizedCorrections,
@@ -8,8 +9,10 @@ import {
   parseGeminiText
 } from '../isirAnalysis.js';
 import {
+  buildCaseStudyAnalysisPrompt,
   CASE_STUDY_ANALYSIS_PROMPT,
-  CASE_STUDY_FINAL_PROMPT
+  CASE_STUDY_FINAL_PROMPT,
+  getClaimsDeadlineStatus
 } from '../isirPrompts.js';
 import {
   CLAIM_AMOUNT_EXTRACTION_PROMPT,
@@ -56,6 +59,9 @@ test('ISIR AI používá původní dvoukrokovou logiku kazuistiky a Gemini 2.5 F
 
 test('ISIR AI rozlišuje formulářová PDF a přihlášky pohledávek', () => {
   assert.equal(isStructuredIsirDocument({ title: 'Zpráva o plnění oddlužení' }), true);
+  assert.equal(isStructuredIsirDocument({
+    title: 'Zpráva pro oddlužení Soupis majetkové podstaty Seznam přihlášených pohledávek'
+  }), true);
   assert.equal(isStructuredIsirDocument({ title: 'Běžné usnesení soudu' }), false);
   assert.equal(isClaimApplicationDocument({ title: 'Přihláška pohledávky' }), true);
   assert.match(STRUCTURED_REPORT_EXTRACTION_PROMPT, /reviewed_unsecured_claims_total/);
@@ -76,4 +82,40 @@ test('kontrolní návrhy nepustí nepovolená pole', () => {
   ]);
   assert.deepEqual(corrections.map((item) => item.field), ['claims_total_amount']);
   assert.match(DATA_VERIFICATION_PROMPT, /Nic neopravuj automaticky/);
+});
+
+test('kazuistika nejprve systémově ověří, zda běží lhůta přihlášek', () => {
+  assert.equal(currentDateInPrague(new Date('2026-12-31T23:30:00.000Z')), '2027-01-01');
+  assert.equal(getClaimsDeadlineStatus('2026-08-03', '2026-07-24').status, 'active');
+  assert.equal(getClaimsDeadlineStatus('2026-07-20', '2026-07-24').status, 'expired');
+  assert.equal(getClaimsDeadlineStatus('', '2026-07-24').status, 'not_verified');
+
+  const prompt = buildCaseStudyAnalysisPrompt({
+    currentDate: '2026-07-24',
+    client: { fullName: 'Klient', projectId: 'MAS' },
+    caseItem: {
+      claims_deadline: '2026-08-03',
+      ai_case_study: 'Předchozí úplná kazuistika.'
+    },
+    documents: [{
+      document_id: 'new-1',
+      title: 'Zpráva pro oddlužení',
+      event_date: '2026-07-24',
+      analysis_json: JSON.stringify({
+        specialized_reader: 'debt_relief_structured_report',
+        structured_extraction: { proceeding_state: { stage: 'permitted' } }
+      })
+    }],
+    contextDocuments: [{
+      document_id: 'old-1',
+      title: 'Usnesení',
+      event_date: '2026-06-03'
+    }]
+  });
+
+  assert.match(prompt, /PRVNÍ POVINNÝ KROK/);
+  assert.match(prompt, /"status": "active"/);
+  assert.match(prompt, /Předchozí úplná kazuistika/);
+  assert.match(prompt, /debt_relief_structured_report/);
+  assert.match(prompt, /Kompletní seznam dokumentů podle ISIR/);
 });

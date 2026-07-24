@@ -301,26 +301,44 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
       map[String(row.document_id || '')] = row;
       return map;
     }, {});
-  const analyzedDocumentRows = documentSummaries.map((documentSummary) => {
+  const documentUpdatesById = {};
+  documentSummaries.forEach((documentSummary) => {
     const documentId = normalizeText_(documentSummary.document_id);
     const documentRow = caseDocumentsById[documentId];
-    if (!documentRow) return null;
+    if (!documentRow) return;
     const updatedRow = Object.assign({}, documentRow, {
-      included_in_case_study: 'Ano',
       analysis_status: 'OK',
       analysis_json: JSON.stringify(documentSummary).slice(0, 45000),
       analysis_at: timestamp,
-      is_new: 'Ne',
       updated_at: timestamp,
       updated_by: context.actorId
     });
     delete updatedRow.__rowNumber;
-    return updatedRow;
-  }).filter(Boolean);
+    documentUpdatesById[documentId] = updatedRow;
+  });
+
+  if (isCaseStudy) {
+    const includedDocumentIds = row.kind === 'LEGACY_LOCAL_IMPORT'
+      ? Object.keys(caseDocumentsById)
+      : documentIds;
+    includedDocumentIds.forEach((documentId) => {
+      const documentRow = documentUpdatesById[documentId] || caseDocumentsById[documentId];
+      if (!documentRow) return;
+      const updatedRow = Object.assign({}, documentRow, {
+        included_in_case_study: 'Ano',
+        is_new: 'Ne',
+        updated_at: timestamp,
+        updated_by: context.actorId
+      });
+      delete updatedRow.__rowNumber;
+      documentUpdatesById[documentId] = updatedRow;
+    });
+  }
+
   bulkUpsertDataObjects_(
     DATA_SHEETS.insolvencyDocuments,
     'document_id',
-    analyzedDocumentRows
+    Object.keys(documentUpdatesById).map((documentId) => documentUpdatesById[documentId])
   );
 
   writeAudit_(context, 'SAVE_ISIR_ANALYSIS', 'ISIR_CASE', caseId, 'OK',

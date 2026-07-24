@@ -19,6 +19,17 @@ const MAX_DOCUMENTS = 10;
 const MAX_PDF_BYTES = 18 * 1024 * 1024;
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
+function currentDateInPrague(now = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Prague',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(now);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -264,9 +275,12 @@ async function analyzeIsirDocuments(input, options = {}) {
   }
   const documents = inputDocuments.slice(0, MAX_DOCUMENTS);
   if (!documents.length) throw new Error('Vyberte alespoň jeden dokument k analýze.');
+  const contextDocuments = Array.isArray(input.context_documents)
+    ? input.context_documents
+    : documents;
   const mode = String(input.mode || 'case-study');
   const pdfs = await fetchSelectedPdfs(documents, fetchImpl);
-  const currentDate = new Date().toISOString().slice(0, 10);
+  const currentDate = currentDateInPrague();
   const controller = new AbortController();
   const timeout = setTimeout(
     () => controller.abort(),
@@ -319,6 +333,7 @@ async function analyzeIsirDocuments(input, options = {}) {
           caseItem: input.case,
           client: input.client,
           documents,
+          contextDocuments,
           currentDate
         })
       },
@@ -385,6 +400,7 @@ async function handleIsirAnalysisRequest(request, response, options = {}) {
 export {
   MAX_DOCUMENTS,
   analyzeIsirDocuments,
+  currentDateInPrague,
   handleIsirAnalysisRequest,
   minimizeSummary,
   normalizeIsirPdfUrl,

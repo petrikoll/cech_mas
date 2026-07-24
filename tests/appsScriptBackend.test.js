@@ -124,6 +124,9 @@ test('importovaná lokální ISIR analýza se uloží jako plnohodnotná kazuist
   assert.match(insolvencyVerificationSource, /ai_case_study:\s*caseStudy/);
   assert.match(insolvencyVerificationSource, /String\(result\.case_study \|\| ''\)[\s\S]*replace\(\/\\r\\n\?\/g, '\\n'\)/);
   assert.doesNotMatch(insolvencyVerificationSource, /normalizeText_\(result\.case_study\)/);
+  assert.match(insolvencyVerificationSource, /row\.kind === 'LEGACY_LOCAL_IMPORT'[\s\S]*Object\.keys\(caseDocumentsById\)/);
+  assert.match(insolvencyVerificationSource, /included_in_case_study:\s*'Ano'/);
+  assert.match(insolvencyVerificationSource, /is_new:\s*'Ne'/);
 });
 
 test('číslování vychází pouze z obsazených klientských řádků', () => {

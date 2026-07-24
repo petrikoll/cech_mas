@@ -245,7 +245,12 @@ test('ISIR AI používá frontu, samostatná shrnutí a potvrzované návrhy opr
   assert.match(serverSource, /\/api\/isir-ai-jobs/);
   assert.match(appSource, /job\.status === 'queued' \|\| job\.status === 'running'/);
   assert.match(appSource, /mode: 'document-summary'/);
+  assert.match(appSource, /mode: 'data-verification'/);
   assert.match(appSource, /mode: 'case-study'/);
+  assert.match(appSource, /updatedCaseStudies \+= await runAutomaticIsirAi\(snapshot, client\)/);
+  assert.match(appSource, /context_documents: serializedContextDocuments/);
+  assert.match(appSource, /included_in_case_study/);
+  assert.match(appSource, /priority\(right\) - priority\(left\)/);
   assert.match(isirSource, /Minimalizovaná shrnutí/);
   assert.match(isirSource, /Zkontrolovat údaje/);
   assert.match(isirSource, /Potvrdit vybrané změny/);

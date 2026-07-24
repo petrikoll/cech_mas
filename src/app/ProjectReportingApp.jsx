@@ -4610,7 +4610,8 @@ function App() {
       setProjectInsolvencyNotice(message);
       if (!options.silent) setFlash(message);
       if (matched && !options.silent && (snapshot.documents || []).some((item) =>
-        /^(ano|true|1)$/i.test(String(item.is_new || '')) && !item.analysis_json
+        /^(ano|true|1)$/i.test(String(item.is_new || ''))
+        && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
       )) {
         window.setTimeout(() => {
           void runAutomaticIsirAi(snapshot, client);
@@ -4647,6 +4648,7 @@ function App() {
     let successful = 0;
     let matched = 0;
     let failed = 0;
+    let updatedCaseStudies = 0;
     let lastFailure = '';
 
     setIsVerifyingProjectInsolvencies(true);
@@ -4659,7 +4661,20 @@ function App() {
         try {
           const snapshot = await checkClientInIsir(client);
           successful += 1;
-          if (/^(ano|true|1)$/i.test(String(snapshot?.verification?.matched || ''))) matched += 1;
+          const isMatched = /^(ano|true|1)$/i.test(String(snapshot?.verification?.matched || ''));
+          if (isMatched) {
+            matched += 1;
+            const pendingDocuments = (snapshot.documents || []).filter((item) =>
+              /^(ano|true|1)$/i.test(String(item.is_new || ''))
+              && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
+            );
+            if (pendingDocuments.length) {
+              setProjectInsolvencyNotice(
+                `ISIR: ID ${client.clientNumber || '—'} · nalezeno ${pendingDocuments.length} nových dokumentů · aktualizuji AI kazuistiku…`
+              );
+              updatedCaseStudies += await runAutomaticIsirAi(snapshot, client);
+            }
+          }
         } catch (error) {
           failed += 1;
           lastFailure = String(error?.message || error).slice(0, 180);
@@ -4675,6 +4690,7 @@ function App() {
         `ISIR dokončen: zpracováno ${eligibleClients.length} klientů`,
         `úspěšně ${successful}`,
         `nalezeno ${matched}`,
+        updatedCaseStudies ? `aktualizované kazuistiky ${updatedCaseStudies}` : '',
         failed ? `chyby ${failed}` : '',
         missingIdentity ? `bez úplné identity ${missingIdentity}` : ''
       ].filter(Boolean).join(' · ');
@@ -4704,7 +4720,13 @@ function App() {
     }
   };
 
-  const analyzeIsirDocuments = async ({ client, caseItem, documents, mode = 'document-summary' }) => {
+  const analyzeIsirDocuments = async ({
+    client,
+    caseItem,
+    documents,
+    contextDocuments = [],
+    mode = 'document-summary'
+  }) => {
     if (!client || !caseItem || !Array.isArray(documents) || !documents.length) {
       throw new Error('Vyberte alespoň jeden dokument k analýze.');
     }
@@ -4713,6 +4735,26 @@ function App() {
       `Gemini analyzuje ${documents.length} PDF ve spise ${caseItem.case_number || 'ISIR'}…`
     );
     try {
+      let structuredContextBudget = 120000;
+      const serializedContextDocuments = contextDocuments.map((document) => {
+        const analysisJson = String(document.analysis_json || '');
+        const isStructuredMainDocument = (
+          /zpráva.*(přezkum|oddlužení|plnění|splnění)|soupis.*majet|seznam.*přihlášen|vyúčtování.*správce/i
+        ).test(String(document.title || ''));
+        const includeAnalysis = (
+          isStructuredMainDocument
+          && analysisJson
+          && analysisJson.length <= structuredContextBudget
+        );
+        if (includeAnalysis) structuredContextBudget -= analysisJson.length;
+        return {
+          document_id: document.document_id,
+          title: document.title,
+          event_date: document.event_date,
+          is_main: document.is_main,
+          analysis_json: includeAnalysis ? analysisJson : ''
+        };
+      });
       const response = await fetch('/api/isir-ai-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -4731,7 +4773,8 @@ function App() {
             source_url: document.source_url,
             is_main: document.is_main,
             analysis_json: document.analysis_json
-          }))
+          })),
+          context_documents: serializedContextDocuments
         })
       });
       const payload = await response.json().catch(() => ({}));
@@ -4814,41 +4857,74 @@ function App() {
   const runAutomaticIsirAi = async (snapshot, client) => {
     const snapshotCases = Array.isArray(snapshot?.cases) ? snapshot.cases : [];
     const snapshotDocuments = Array.isArray(snapshot?.documents) ? snapshot.documents : [];
+    let updatedCaseStudies = 0;
     for (const caseItem of snapshotCases) {
-      const newDocuments = snapshotDocuments
+      const allCaseDocuments = snapshotDocuments
+        .filter((item) => item.case_id === caseItem.case_id)
+        .sort((left, right) =>
+          String(right.event_date || '').localeCompare(String(left.event_date || ''))
+        );
+      const newDocuments = allCaseDocuments
         .filter((item) =>
-          item.case_id === caseItem.case_id
-          && /^(ano|true|1)$/i.test(String(item.is_new || ''))
-          && !item.analysis_json
+          /^(ano|true|1)$/i.test(String(item.is_new || ''))
+          && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
         )
+        .sort((left, right) => {
+          const priority = (item) => {
+            const title = String(item.title || '');
+            if (
+              /zpráva.*(přezkum|oddlužení|plnění|splnění)|soupis.*(majet|přihlášen)|seznam.*přihlášen|vyúčtování.*správce/i
+                .test(title)
+            ) return 2;
+            return /^(ano|true|1)$/i.test(String(item.is_main || '')) ? 1 : 0;
+          };
+          return priority(right) - priority(left)
+            || String(right.event_date || '').localeCompare(String(left.event_date || ''));
+        })
         .slice(0, 10);
       if (!newDocuments.length) continue;
       try {
-        const documentAnalysis = await analyzeIsirDocuments({
-          client,
-          caseItem,
-          documents: newDocuments,
-          mode: 'document-summary'
-        });
-        const summaryById = Object.fromEntries(
-          (documentAnalysis?.result?.document_summaries || [])
-            .map((item) => [String(item.document_id), item])
-        );
+        const documentsWithoutSummary = newDocuments.filter((document) => !document.analysis_json);
+        let summaryById = {};
+        if (documentsWithoutSummary.length) {
+          const documentAnalysis = await analyzeIsirDocuments({
+            client,
+            caseItem,
+            documents: documentsWithoutSummary,
+            contextDocuments: allCaseDocuments,
+            mode: 'document-summary'
+          });
+          summaryById = Object.fromEntries(
+            (documentAnalysis?.result?.document_summaries || [])
+              .map((item) => [String(item.document_id), item])
+          );
+        }
+        const enrichedNewDocuments = newDocuments.map((document) => ({
+          ...document,
+          analysis_json: summaryById[String(document.document_id)]
+            ? JSON.stringify(summaryById[String(document.document_id)])
+            : document.analysis_json
+        }));
         await analyzeIsirDocuments({
           client,
           caseItem,
-          documents: newDocuments.map((document) => ({
-            ...document,
-            analysis_json: summaryById[String(document.document_id)]
-              ? JSON.stringify(summaryById[String(document.document_id)])
-              : document.analysis_json
-          })),
+          documents: enrichedNewDocuments,
+          contextDocuments: allCaseDocuments,
+          mode: 'data-verification'
+        });
+        await analyzeIsirDocuments({
+          client,
+          caseItem,
+          documents: enrichedNewDocuments,
+          contextDocuments: allCaseDocuments,
           mode: 'case-study'
         });
+        updatedCaseStudies += 1;
       } catch (error) {
         console.error('Automatic ISIR AI queue failed:', error);
       }
     }
+    return updatedCaseStudies;
   };
 
   const importLegacyIsirData = async (bundle) => {

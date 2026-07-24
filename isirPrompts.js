@@ -148,14 +148,67 @@ Pravidla:
 - Termíny starší než aktuální datum zpracování neuváděj v první sekci jako „nejbližší termíny“ ani jako budoucí očekávané kroky.
 - Jestliže pracovní rozbor obsahuje starý termín jako aktuální, ve finálním výstupu ho oprav: přesuň ho do historie nebo napiš, že z dostupných dokumentů není zřejmé, jak byl po tomto termínu vyřešen.`;
 
-export const buildCaseStudyAnalysisPrompt = ({ client, caseItem, documents, currentDate }) => {
-  const structuredDocuments = documents
+export const getClaimsDeadlineStatus = (deadlineValue, currentDateValue) => {
+  const normalizeDate = (value) => {
+    const text = String(value || '').trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const match = text.match(/^(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})$/);
+    return match
+      ? `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`
+      : '';
+  };
+  const deadline = normalizeDate(deadlineValue);
+  const currentDate = normalizeDate(currentDateValue);
+  if (!deadline || !currentDate) {
+    return {
+      status: 'not_verified',
+      deadline: deadline || '',
+      statement: 'Lhůta pro podávání přihlášek pohledávek není bezpečně ověřena.'
+    };
+  }
+  if (deadline === currentDate) {
+    return {
+      status: 'ends_today',
+      deadline,
+      statement: `Lhůta pro podávání přihlášek pohledávek končí dnes (${deadline}).`
+    };
+  }
+  if (deadline > currentDate) {
+    return {
+      status: 'active',
+      deadline,
+      statement: `Lhůta pro podávání přihlášek pohledávek běží do ${deadline}.`
+    };
+  }
+  return {
+    status: 'expired',
+    deadline,
+    statement: `Lhůta pro podávání přihlášek pohledávek skončila ${deadline}.`
+  };
+};
+
+export const buildCaseStudyAnalysisPrompt = ({
+  client,
+  caseItem,
+  documents,
+  contextDocuments = documents,
+  currentDate
+}) => {
+  const deadlineStatus = getClaimsDeadlineStatus(caseItem?.claims_deadline, currentDate);
+  const documentsById = new Map(
+    [...contextDocuments, ...documents].map((document) => [String(document.document_id || ''), document])
+  );
+  const structuredDocuments = [...documentsById.values()]
     .map((document) => {
       if (!document.analysis_json) return null;
       try {
         const value = typeof document.analysis_json === 'object'
           ? document.analysis_json
           : JSON.parse(document.analysis_json);
+        if (
+          value?.specialized_reader !== 'debt_relief_structured_report'
+          && !value?.structured_extraction
+        ) return null;
         return { document_id: document.document_id, title: document.title, data: value };
       } catch {
         return null;
@@ -168,6 +221,7 @@ export const buildCaseStudyAnalysisPrompt = ({ client, caseItem, documents, curr
 OVĚŘENÁ SYSTÉMOVÁ DATA:
 ${JSON.stringify({
     current_date: currentDate,
+    claims_deadline_verification_first_step: deadlineStatus,
     client: {
       name: client?.fullName || '',
       project: client?.projectId || ''
@@ -184,21 +238,43 @@ ${JSON.stringify({
     }
   }, null, 2)}
 
+PRVNÍ POVINNÝ KROK:
+Nejprve převezmi výsledek claims_deadline_verification_first_step.
+V části „Stav nyní“ výslovně uveď, zda lhůta pro podávání přihlášek pohledávek
+běží, končí dnes, skončila, nebo není bezpečně ověřena. Tento stav znovu nepočítej
+a neměň podle staršího textu nebo PDF.
+
+PŘEDCHOZÍ ÚPLNÁ KAZUISTIKA:
+${caseItem?.ai_case_study || 'Zatím neexistuje.'}
+
+Předchozí kazuistika je základ aktualizace. Zachovej stále platná fakta a historii,
+ale oprav aktuální stav, lhůty, úkoly a finance podle dnešních systémových dat
+a nových dokumentů. Nová kazuistika nesmí ztratit dříve doložené části jen proto,
+že tentokrát byly ke čtení předány pouze nové dokumenty.
+
 STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF:
 ${structuredDocuments.length ? JSON.stringify(structuredDocuments, null, 2) : 'Nejsou k dispozici.'}
 
 Kompletní seznam dokumentů podle ISIR:
+${contextDocuments.map((document, index) =>
+    `${index + 1}. ${document.event_date || 'bez data'} – ${document.title || 'Dokument ISIR'} – ID ${document.document_id}`
+  ).join('\n')}
+
+NOVÉ DOKUMENTY PŘEDANÉ K AKTUALIZACI:
 ${documents.map((document, index) =>
     `${index + 1}. ${document.event_date || 'bez data'} – ${document.title || 'Dokument ISIR'} – ID ${document.document_id}`
   ).join('\n')}`;
 };
 
-export const buildCaseStudyFinalPrompt = ({ workingAnalysis, caseItem, currentDate }) => `${CASE_STUDY_FINAL_PROMPT}
+export const buildCaseStudyFinalPrompt = ({ workingAnalysis, caseItem, currentDate }) => {
+  const deadlineStatus = getClaimsDeadlineStatus(caseItem?.claims_deadline, currentDate);
+  return `${CASE_STUDY_FINAL_PROMPT}
 
 AKTUÁLNÍ DATUM ZPRACOVÁNÍ: ${currentDate}
 
 OVĚŘENÁ SYSTÉMOVÁ DATA:
 ${JSON.stringify({
+  claims_deadline_verification_first_step: deadlineStatus,
   case_number: caseItem?.case_number || '',
   case_status: caseItem?.case_status || '',
   claims_deadline: caseItem?.claims_deadline || 'není bezpečně ověřeno',
@@ -206,8 +282,13 @@ ${JSON.stringify({
   claims_total_amount: caseItem?.claims_total_amount || 'není bezpečně ověřeno'
 }, null, 2)}
 
+První věta části „Stav nyní“ musí sdělit výsledek
+claims_deadline_verification_first_step. Tento systémový výsledek má přednost
+před starší kazuistikou i textem PDF.
+
 PRACOVNÍ ODBORNÝ ROZBOR:
 ${JSON.stringify(workingAnalysis, null, 2)}`;
+};
 
 export const buildCaseStudyShorteningPrompt = (caseStudy) => `Zkrať následující finální kazuistiku na nejvýše 6 000 znaků včetně mezer.
 Zachovej stejný formát značek [[SECTION:key:Název]].
