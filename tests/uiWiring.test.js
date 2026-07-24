@@ -54,6 +54,11 @@ test('úprava klienta se otevírá z minikarty v modálním okně', () => {
   assert.match(appSource, /\{false && \(\s*<Panel\s+title=\{selectedClient\.fullName\}/);
 });
 
-test('pravý sloupec začíná podporami a zřetelně ukazuje vybraného klienta', () => {
-  assert.match(appSource, /title="Podpory podle typu"[\s\S]*?Vybraný klient[\s\S]*?\{selectedClient\.fullName\}/);
+test('pravý sloupec začíná podporami a v hlavičce nechává jen jméno klienta', () => {
+  assert.match(appSource, /title=\{selectedClient\.fullName\}[\s\S]*?titleClassName="!text-2xl !font-black !text-indigo-950"/);
+  assert.doesNotMatch(appSource, /title="Podpory podle typu"/);
+  assert.doesNotMatch(appSource, /Vybraný klient/);
+  assert.doesNotMatch(appSource, /label="Položky na ose"/);
+  assert.doesNotMatch(appSource, /label="Čas podpory"/);
+  assert.doesNotMatch(appSource, /label="Dokumenty"/);
 });

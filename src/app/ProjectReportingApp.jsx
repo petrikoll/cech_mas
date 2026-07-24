@@ -6889,17 +6889,9 @@ ${rawPlanOutput}` }] }],
 
                   <div className="grid gap-4">
                     <Panel
-                      title="Podpory podle typu"
-                      description="Počet podpor a čas podpory za jednotlivé typy klientských aktivit."
-                      icon={BarChart3}
-                      help={HELP.clientsSupportHours}
-                      className="!border-indigo-400 !bg-indigo-100/70 ring-2 ring-indigo-200/80"
-                      action={
-                        <div className="min-w-[220px] rounded-xl border border-indigo-300 bg-white px-4 py-2 text-right shadow-sm">
-                          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-indigo-500">Vybraný klient</div>
-                          <div className="mt-0.5 truncate text-base font-extrabold text-indigo-950">{selectedClient.fullName}</div>
-                        </div>
-                      }
+                      title={selectedClient.fullName}
+                      titleClassName="!text-2xl !font-black !text-indigo-950"
+                      className="!border-indigo-500 !bg-indigo-100 ring-2 ring-indigo-300"
                     >
                       {selectedClientSupportBreakdown.byType.length === 0 ?(
                         <EmptyState icon={BarChart3} title="U klienta zatím nejsou evidované žádné podpory." />
@@ -6952,11 +6944,6 @@ ${rawPlanOutput}` }] }],
                         </button>
                       }
                     >
-                      <div className="mb-3 grid gap-3 md:grid-cols-3">
-                        <InfoCard icon={History} label="Položky na ose" value={String(clientJourneyTimeline.length)} />
-                        <InfoCard icon={Clock} label="Čas podpory" value={formatSupportMinutes(getClientStats(selectedClient.id, clientJourneyTimeline).supportMinutes)} />
-                        <InfoCard icon={Target} label="Dokumenty" value={String(clientJourneyTimeline.filter((record) => Boolean(record.documentText)).length)} />
-                      </div>
                       <div className="space-y-3">
                         {clientJourneyTimeline.length === 0 ?(
                           <EmptyState icon={FileText} title="Klient zatím nemá žádné uložené kroky v KA1 ani KA2." />

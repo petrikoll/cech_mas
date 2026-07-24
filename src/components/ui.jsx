@@ -51,15 +51,17 @@ const FieldLabel = ({ label, help }) => (
 );
 
 
-const Panel = ({ title, description, icon: Icon, action, children, className = '', help }) => (
+const Panel = ({ title, description, icon: Icon, action, children, className = '', help, titleClassName = '' }) => (
   <section className={`rounded-2xl border border-slate-500 bg-slate-300 p-4 shadow-sm ${className}`}>
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex items-start gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
-          <Icon className="h-5 w-5" />
-        </div>
+        {Icon && (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+            <Icon className="h-5 w-5" />
+          </div>
+        )}
         <div>
-          <div className="flex items-center gap-1"><h2 className="text-base font-bold text-slate-900">{title}</h2><HelpIcon help={help} /></div>
+          <div className="flex items-center gap-1"><h2 className={`text-base font-bold text-slate-900 ${titleClassName}`}>{title}</h2><HelpIcon help={help} /></div>
           {description && <p className="mt-0.5 text-xs text-slate-500">{description}</p>}
         </div>
       </div>
