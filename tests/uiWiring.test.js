@@ -44,3 +44,16 @@ test('výkon KA1 nabízí AI návrh s kontrolou klientské osy', () => {
   assert.match(ka1PerformanceSource, /Kontrola návrhu proti klientské ose/);
   assert.match(ka1PerformanceSource, /Gemini 2\.5 Flash/);
 });
+
+test('úprava klienta se otevírá z minikarty v modálním okně', () => {
+  assert.match(appSource, /aria-label=\{`Upravit klienta \$\{client\.fullName\}`\}/);
+  assert.match(appSource, /role="dialog"/);
+  assert.match(appSource, /aria-labelledby="client-edit-dialog-title"/);
+  assert.match(appSource, /Upravit klienta · \{selectedClient\.fullName\}/);
+  assert.match(appSource, /Uložit úpravy/);
+  assert.match(appSource, /\{false && \(\s*<Panel\s+title=\{selectedClient\.fullName\}/);
+});
+
+test('pravý sloupec začíná podporami a zřetelně ukazuje vybraného klienta', () => {
+  assert.match(appSource, /title="Podpory podle typu"[\s\S]*?Vybraný klient[\s\S]*?\{selectedClient\.fullName\}/);
+});

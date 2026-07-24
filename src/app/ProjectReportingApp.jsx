@@ -4197,13 +4197,14 @@ function App() {
     }
   };
 
-  const openClientEditForm = () => {
-    if (!selectedClient) return;
+  const openClientEditForm = (client = selectedClient) => {
+    if (!client) return;
     clearSaveButtonNotice('client-update');
     setClientEditDraft({
       ...emptyClientDraft,
-      ...selectedClient
+      ...client
     });
+    setSelectedClientId(client.id);
     setShowClientEditForm(true);
   };
 
@@ -4252,6 +4253,7 @@ function App() {
       setSheetError('');
       setSaveButtonNotice('client-update', 'success', 'Klient uložen');
       setFlash('Klient uložen');
+      setShowClientEditForm(false);
     } catch (error) {
       console.error('Google Sheets client update error:', error);
       const message = saveErrorMessage('Klient nebyl uložen', error);
@@ -6706,7 +6708,21 @@ ${rawPlanOutput}` }] }],
                             <div className="min-w-0">
                               <div className="truncate text-sm font-bold text-slate-900">{client.fullName}</div>
                             </div>
-                            <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                            <div className="flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openClientEditForm(client);
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-blue-700 transition hover:bg-blue-100"
+                                aria-label={`Upravit klienta ${client.fullName}`}
+                              >
+                                <Pencil className="h-3 w-3" />
+                                Upravit
+                              </button>
+                              <ChevronRight className="h-4 w-4 text-slate-400" />
+                            </div>
                           </div>
                           <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-xs">
                             <MiniBadge icon={Database} label={`ID ${formatClientShortId(client)}`} tone="slate" />
@@ -6723,6 +6739,7 @@ ${rawPlanOutput}` }] }],
             <div className="space-y-4">
               {selectedClient ?(
                 <>
+                  {false && (
                   <Panel
                     title={selectedClient.fullName}
                     icon={User}
@@ -6868,9 +6885,22 @@ ${rawPlanOutput}` }] }],
                       )}
                     </div>
                   </Panel>
+                  )}
 
                   <div className="grid gap-4">
-                    <Panel title="Podpory podle typu" description="Počet podpor a čas podpory za jednotlivé typy klientských aktivit." icon={BarChart3} help={HELP.clientsSupportHours} className="!border-indigo-400 !bg-indigo-100/70 ring-2 ring-indigo-200/80">
+                    <Panel
+                      title="Podpory podle typu"
+                      description="Počet podpor a čas podpory za jednotlivé typy klientských aktivit."
+                      icon={BarChart3}
+                      help={HELP.clientsSupportHours}
+                      className="!border-indigo-400 !bg-indigo-100/70 ring-2 ring-indigo-200/80"
+                      action={
+                        <div className="min-w-[220px] rounded-xl border border-indigo-300 bg-white px-4 py-2 text-right shadow-sm">
+                          <div className="text-[10px] font-extrabold uppercase tracking-[0.18em] text-indigo-500">Vybraný klient</div>
+                          <div className="mt-0.5 truncate text-base font-extrabold text-indigo-950">{selectedClient.fullName}</div>
+                        </div>
+                      }
+                    >
                       {selectedClientSupportBreakdown.byType.length === 0 ?(
                         <EmptyState icon={BarChart3} title="U klienta zatím nejsou evidované žádné podpory." />
                       ) : (
@@ -7646,6 +7676,133 @@ ${rawPlanOutput}` }] }],
           </React.Suspense>
         )}
       </main>
+
+      {showClientEditForm && selectedClient && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 p-3 backdrop-blur-sm sm:p-6"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSaving) {
+              clearSaveButtonNotice('client-update');
+              setShowClientEditForm(false);
+            }
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-edit-dialog-title"
+            className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-blue-200 bg-white shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-200 bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 sm:px-6">
+              <div>
+                <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-700">Klientský registr</div>
+                <h2 id="client-edit-dialog-title" className="mt-1 text-xl font-extrabold text-slate-950">
+                  Upravit klienta · {selectedClient.fullName}
+                </h2>
+                <div className="mt-1 text-xs text-slate-500">ID {formatClientShortId(selectedClient)}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  clearSaveButtonNotice('client-update');
+                  setShowClientEditForm(false);
+                }}
+                disabled={isSaving}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+              >
+                Zavřít
+              </button>
+            </div>
+
+            <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
+              <ClientRegistrationFields draft={clientEditDraft} setDraft={setClientEditDraft} />
+
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                <div className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-500">Další práce s klientem</div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={summarizeClientCase}
+                    disabled={isSummarizingCase}
+                    className="inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-white px-3 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50 disabled:opacity-60"
+                  >
+                    {isSummarizingCase ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCopy className="h-4 w-4" />}
+                    Shrnout zakázku AI
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => provisionClientDriveFolder(selectedClient)}
+                    disabled={isProvisioningClientFolder}
+                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+                  >
+                    {isProvisioningClientFolder ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
+                    Vytvořit složku klienta
+                  </button>
+                </div>
+
+                {clientCaseSummary && (
+                  <pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded-lg border border-indigo-100 bg-white p-3 text-sm leading-relaxed text-slate-800">
+                    {clientCaseSummary}
+                  </pre>
+                )}
+
+                {selectedClientDriveBundle?.payload && (
+                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    {[
+                      {
+                        key: 'folder',
+                        title: 'Klientská složka',
+                        url: selectedClientDriveBundle.payload.clientFolderUrl
+                      },
+                      {
+                        key: 'monlist',
+                        title: 'Monitorovací list',
+                        url: selectedClientDriveBundle.payload.monListFileUrl
+                      }
+                    ].map((item) => (
+                      <a
+                        key={item.key}
+                        href={item.url || '#'}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                      >
+                        {item.title} – otevřít
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
+              <button
+                type="button"
+                onClick={() => {
+                  clearSaveButtonNotice('client-update');
+                  setShowClientEditForm(false);
+                }}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+              >
+                Zrušit
+              </button>
+              <button
+                type="button"
+                onClick={handleClientUpdate}
+                disabled={isSaving}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                {isSaving ? 'Ukládám…' : 'Uložit úpravy'}
+              </button>
+              <SaveInlineNotice notice={saveButtonNotices['client-update']} />
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
