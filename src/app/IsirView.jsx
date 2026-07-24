@@ -11,7 +11,6 @@ import {
   Download,
   DownloadCloud,
   ExternalLink,
-  Eye,
   FileDown,
   FileText,
   Filter,
@@ -257,6 +256,7 @@ export default function IsirView({
   if (view === 'detail' && selectedRow) {
     const finance = analysisResult.finances || {};
     const caseNewDocuments = selectedCaseDocuments.filter((item) => isTruthy(item.is_new));
+    const previewDocument = selectedCaseDocuments.find((item) => item.document_id === previewDocumentId) || null;
     return (
       <section className="space-y-4">
         <div className="rounded-3xl border border-white bg-white/[0.94] p-5 shadow-[0_22px_60px_-46px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.05]">
@@ -319,7 +319,7 @@ export default function IsirView({
               ))}
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.28fr)_minmax(360px,0.72fr)]">
+            <div className="space-y-4">
               <div className="space-y-4">
                 <article className="rounded-3xl border border-white bg-white/[0.94] p-5 shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -376,10 +376,25 @@ export default function IsirView({
                       const storedSize = formatBytes(document.stored_size);
                       return (
                         <div key={document.document_id} className={selected ? 'bg-violet-50/45' : 'bg-white'}>
-                          <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-                            <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
-                              <input type="checkbox" checked={selected} disabled={!selected && selectedDocumentIds.length >= 10} onChange={() => toggleDocument(document.document_id)} className="mt-1 h-4 w-4 rounded border-slate-300 text-violet-700 focus:ring-violet-200 disabled:opacity-40" />
-                              <span className="min-w-0">
+                          <div className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center">
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={selected}
+                                disabled={!selected && selectedDocumentIds.length >= 10}
+                                onChange={() => toggleDocument(document.document_id)}
+                                aria-label={`Vybrat dokument ${document.title}`}
+                                className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-violet-700 focus:ring-violet-200 disabled:opacity-40"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setPreviewDocumentId(previewDocumentId === document.document_id ? '' : document.document_id)}
+                                className={`min-w-0 flex-1 rounded-lg px-2 py-1 text-left transition ${
+                                  previewDocumentId === document.document_id
+                                    ? 'bg-sky-50 ring-1 ring-sky-200'
+                                    : 'hover:bg-slate-50'
+                                }`}
+                              >
                                 <span className="flex flex-wrap items-center gap-2">
                                   <strong className="text-sm text-slate-900">{formatDate(document.event_date)} · {document.title}</strong>
                                   <span className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase ring-1 ${
@@ -392,17 +407,14 @@ export default function IsirView({
                                   {originalSize ? ` · ${originalSize}` : ''}
                                   {storedSize && storedSize !== originalSize ? ` → ${storedSize}` : ''}
                                 </span>
-                              </span>
-                            </label>
-                            <div className="flex shrink-0 flex-wrap gap-2 pl-7 sm:pl-0">
+                              </button>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap gap-1.5 pl-7 sm:pl-0">
                               {documentAnalysis.summary && (
                                 <button type="button" onClick={() => setExpandedDocumentId(expanded ? '' : document.document_id)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800">
                                   <Bot className="h-3.5 w-3.5" /> Shrnutí <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? 'rotate-180' : ''}`} />
                                 </button>
                               )}
-                              <button type="button" onClick={() => setPreviewDocumentId(previewDocumentId === document.document_id ? '' : document.document_id)} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100">
-                                <Eye className="h-3.5 w-3.5" /> {previewDocumentId === document.document_id ? 'Skrýt náhled' : 'Náhled PDF'}
-                              </button>
                               <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                                 <ExternalLink className="h-3.5 w-3.5" /> Otevřít
                               </a>
@@ -422,34 +434,45 @@ export default function IsirView({
                               <p className="mt-1">{documentAnalysis.summary}</p>
                             </div>
                           )}
-                          {previewDocumentId === document.document_id && (
-                            <div className="mx-4 mb-4 overflow-hidden rounded-2xl border border-sky-200 bg-slate-100 shadow-inner">
-                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-100 bg-white px-4 py-3">
-                                <div>
-                                  <p className="text-xs font-black uppercase tracking-wide text-sky-800">Náhled PDF</p>
-                                  <p className="mt-0.5 max-w-2xl truncate text-xs text-slate-500">{document.title}</p>
-                                </div>
-                                <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-2 text-xs font-extrabold text-white hover:bg-sky-800">
-                                  <ExternalLink className="h-3.5 w-3.5" /> Otevřít ve velkém
-                                </a>
-                              </div>
-                              <iframe
-                                src={document.drive_url || document.source_url}
-                                title={`Náhled dokumentu ${document.title}`}
-                                loading="lazy"
-                                referrerPolicy="no-referrer"
-                                className="h-[68vh] min-h-[520px] w-full bg-white"
-                              />
-                            </div>
-                          )}
                         </div>
                       );
                     })}
                   </div>
+                  {previewDocument && (
+                    <div className="border-t border-slate-200 bg-slate-50/70 p-4 sm:p-5">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <strong className="block truncate text-base text-slate-950">{previewDocument.title}</strong>
+                          <span className="mt-1 block text-xs text-slate-500">{formatDate(previewDocument.event_date)}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button type="button" onClick={() => setPreviewDocumentId('')} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                            <ChevronDown className="h-3.5 w-3.5" /> Sbalit náhled
+                          </button>
+                          <a href={previewDocument.drive_url || previewDocument.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-2 text-xs font-extrabold text-white hover:bg-sky-800">
+                            <ExternalLink className="h-3.5 w-3.5" /> Otevřít
+                          </a>
+                          <a href={previewDocument.source_url} target="_blank" rel="noreferrer" download className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                            <Download className="h-3.5 w-3.5" /> Stáhnout
+                          </a>
+                        </div>
+                      </div>
+                      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner">
+                        <iframe
+                          src={previewDocument.drive_url || previewDocument.source_url}
+                          title={`Náhled dokumentu ${previewDocument.title}`}
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                          className="h-[72vh] min-h-[560px] w-full bg-white"
+                        />
+                      </div>
+                      <p className="mt-2 text-xs text-slate-500">Pokud se náhled PDF nezobrazí, použijte tlačítko Otevřít nebo Stáhnout.</p>
+                    </div>
+                  )}
                 </article>
               </div>
 
-              <aside className="space-y-4">
+              <div className="space-y-4">
                 <article className="rounded-3xl border border-white bg-white/[0.95] p-5 shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
                   <div className="flex items-center justify-between gap-3">
                     <div>
@@ -497,7 +520,7 @@ export default function IsirView({
                     </div>
                   )}
                 </article>
-              </aside>
+              </div>
             </div>
           </>
         )}

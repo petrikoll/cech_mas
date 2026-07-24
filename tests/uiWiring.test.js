@@ -220,8 +220,10 @@ test('ISIR imports a saved local archive without another Gemini call', () => {
     'utf8'
   );
   assert.match(isirViewSource, /Načíst připravená data z Disku/);
-  assert.match(isirViewSource, /Náhled PDF/);
+  assert.match(isirViewSource, /Sbalit náhled/);
   assert.match(isirViewSource, /<iframe/);
+  assert.match(isirViewSource, /const previewDocument =/);
+  assert.doesNotMatch(isirViewSource, /xl:grid-cols-\[minmax\(0,1\.28fr\)_minmax\(360px,0\.72fr\)\]/);
   assert.match(appSource, /importLegacyIsirData/);
   assert.match(appSource, /readLegacyIsirMigrationFile/);
   assert.match(appSource, /Gemini nebyl spuštěn/);
