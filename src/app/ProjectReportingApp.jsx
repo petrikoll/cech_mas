@@ -100,6 +100,7 @@ import {
 } from '../lib/legacyPerformancePresentation.js';
 import { mapPaymentPlanRowToRecord } from '../lib/paymentPlans.js';
 import { buildProjectDashboard } from '../lib/projectDashboard.js';
+import { buildDebtMappingContext } from '../lib/debtMapping.js';
 import AiDocumentPanel from './AiDocumentPanel.jsx';
 import Ka02View from './Ka02View.jsx';
 import ProjectSwitcher from '../components/ProjectSwitcher.jsx';
@@ -578,7 +579,8 @@ const CLIENT_JOURNEY_ENTITY_TYPES = new Set([
   'tpm_records',
   'mentoring_records',
   'employment_records',
-  'mentor_report_document'
+  'mentor_report_document',
+  'debt_mapping_document'
 ]);
 
 const CLIENT_JOURNEY_META = {
@@ -588,6 +590,7 @@ const CLIENT_JOURNEY_META = {
   debt_cases: { stage: 'KA02', label: 'Dluhové poradenství', tone: 'blue', icon: Scale },
   therapy_sessions: { stage: 'KA02', label: 'Terapie', tone: 'blue', icon: Brain },
   job_simulators: { stage: 'KA02', label: 'Pracovní simulátor', tone: 'blue', icon: Presentation },
+  debt_mapping_document: { stage: 'KA1', label: 'Mapování závazků', tone: 'amber', icon: FileText },
 };
 
 const JOURNEY_TONE_CLASSES = {
@@ -758,7 +761,8 @@ function buildClientJourneySummary(record) {
     tpm_records: [payload.employer, payload.workplace].filter(Boolean).join(' • '),
     mentoring_records: payload.progressSummary || payload.nextSupportSteps || payload.barriers,
     employment_records: [payload.employmentType, payload.employmentStatus, payload.sustainabilitySupport].filter(Boolean).join(' • '),
-    mentor_report_document: record.documentText
+    mentor_report_document: record.documentText,
+    debt_mapping_document: record.documentText
   }[record.entityType];
 
   const textSource = specificSummary || record.documentText || JSON.stringify(payload || {});
@@ -1599,7 +1603,7 @@ function stringifyPlanGoals(goals) {
     .join('\n\n');
 }
 
-function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], meetings = [], networkMeetings = [], partners = [], education = [], supervision = [], paymentPlans = [], insolvencyVerifications = [] }, clientIndex = {}) {
+function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], meetings = [], networkMeetings = [], partners = [], education = [], supervision = [], paymentPlans = [], debtMappings = [], insolvencyVerifications = [] }, clientIndex = {}) {
   const clientName = (clientId) => clientIndex[clientId]?.fullName || clientId || '';
   const statusOk = (row) => !String(row.status || '').toLowerCase().includes('smaz');
   const records = [];
@@ -1880,6 +1884,36 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
   paymentPlans.filter(statusOk).forEach((row) => {
     const record = mapPaymentPlanRowToRecord(row, clientIndex);
     if (record) records.push(record);
+  });
+
+  debtMappings.forEach((row) => {
+    const id = asSheetText(row.mapping_id);
+    const clientId = asSheetText(row.client_id);
+    if (!id || !clientId) return;
+    records.push({
+      id,
+      remoteSource: 'google-sheet',
+      sourceSystem: 'GENERATED_DOCUMENT',
+      isGeneratedReadOnly: true,
+      entityType: 'debt_mapping_document',
+      ka: 'KA1',
+      title: asSheetText(row.title) || 'Mapování závazků a příčin předlužení',
+      activityDate: asSheetDate(row.activity_date || row.created_at),
+      worker: asSheetWorker(row.updated_by || row.created_by),
+      clientId,
+      clientIds: [clientId],
+      clientName: clientName(clientId),
+      documentText: asSheetText(row.document_text),
+      documentUrl: asSheetText(row.file_url),
+      payload: {
+        timelineBasis: asSheetText(row.timeline_basis),
+        model: asSheetText(row.model),
+        sources: parseSheetJson(row.sources_json, [])
+      },
+      indicatorFlags: {},
+      createdAt: Date.parse(asSheetText(row.created_at)) || 0,
+      updatedAt: Date.parse(asSheetText(row.updated_at)) || 0
+    });
   });
 
   insolvencyVerifications.forEach((row) => {
@@ -2329,6 +2363,8 @@ function App() {
   const pendingClientSaveSignaturesRef = useRef(new Set());
   const generatedOutputSaveLockRef = useRef(false);
   const [isProvisioningClientFolder, setIsProvisioningClientFolder] = useState(false);
+  const [isCreatingDebtMapping, setIsCreatingDebtMapping] = useState(false);
+  const [debtMappingResult, setDebtMappingResult] = useState(null);
   const [isSummarizingCase, setIsSummarizingCase] = useState(false);
   const [isVerifyingInsolvency, setIsVerifyingInsolvency] = useState(false);
   const [isVerifyingProjectInsolvencies, setIsVerifyingProjectInsolvencies] = useState(false);
@@ -2718,7 +2754,7 @@ function App() {
 
     const fetchSheetRecords = async () => {
       try {
-        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics, insolvencyVerificationsResult, insolvencyCasesResult, insolvencyDocumentsResult, insolvencyAnalysesResult] = await Promise.all([
+        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, debtMappings, statistics, insolvencyVerificationsResult, insolvencyCasesResult, insolvencyDocumentsResult, insolvencyAnalysesResult] = await Promise.all([
           fetchAction('listIndividualPlans'),
           fetchAction('listPerformances'),
           fetchAction('listMeetings'),
@@ -2735,6 +2771,10 @@ function App() {
           fetchAction('listPaymentPlans').catch((error) => {
             console.warn('Payment plans load skipped:', error);
             return { paymentPlans: [] };
+          }),
+          fetchAction('listDebtMappings').catch((error) => {
+            console.warn('Debt mappings load skipped:', error);
+            return { debtMappings: [] };
           }),
           fetchAction('listStatistics').catch((error) => {
             console.warn('Statistics records load skipped:', error);
@@ -2772,6 +2812,7 @@ function App() {
           education: education.education || education.educations || education.vzdelavani || [],
           supervision: supervision.supervision || supervision.supervisions || supervision.supervize || [],
           paymentPlans: paymentPlans.paymentPlans || [],
+          debtMappings: debtMappings.debtMappings || [],
           insolvencyVerifications: insolvencyVerificationsResult.insolvencyVerifications || []
         }, clientIndex).map((record) => ({
           ...record,
@@ -2992,6 +3033,7 @@ function App() {
 
   useEffect(() => {
     setSelectedJourneyPrintIds([]);
+    setDebtMappingResult(null);
   }, [selectedClientId]);
 
   const recordsByType = useMemo(() => groupRecordsByType(records), [records]);
@@ -3357,6 +3399,13 @@ function App() {
   const selectedClientInsolvencyVerification = useMemo(
     () => records.find(
       (record) => record.entityType === 'insolvency_verification' && record.clientId === selectedClientId
+    ) || null,
+    [records, selectedClientId]
+  );
+
+  const selectedDebtMappingRecord = useMemo(
+    () => records.find(
+      (record) => record.entityType === 'debt_mapping_document' && record.clientId === selectedClientId
     ) || null,
     [records, selectedClientId]
   );
@@ -3914,6 +3963,78 @@ function App() {
       }
     }
     throw new Error('Google Sheet akce selhala po opakovaných pokusech.');
+  };
+
+  const createDebtMappingDocument = async () => {
+    if (!selectedClient) {
+      setFlash('Nejprve vyberte klienta.');
+      return;
+    }
+    if (!GOOGLE_SHEET_MACRO_URL) {
+      setFlash('Propojení s Google Diskem není nastavené.');
+      return;
+    }
+
+    setIsCreatingDebtMapping(true);
+    setDebtMappingResult(null);
+    setFlash('Připravuji podklady z monitorovacích dat a ISIR…');
+    try {
+      const context = buildDebtMappingContext({
+        client: selectedClient,
+        records,
+        insolvencyCases,
+        insolvencyDocuments,
+        insolvencyAnalyses,
+        insolvencyVerifications
+      });
+      const aiResponse = await fetch('/api/debt-mapping', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context })
+      });
+      const aiPayload = await aiResponse.json().catch(() => ({}));
+      if (!aiResponse.ok || aiPayload.ok === false || !aiPayload.document) {
+        throw new Error(aiPayload.error || 'AI mapování se nepodařilo vytvořit.');
+      }
+
+      setFlash('Mapování je vytvořené, ukládám dokument do složky klienta…');
+      const savedResponse = await postGoogleSheetAction({
+        action: 'saveDebtMappingDocument',
+        client_id: selectedClient.id,
+        document: aiPayload.document,
+        metadata: {
+          model: aiPayload.model || 'gemini-2.5-flash',
+          generated_at: aiPayload.generatedAt || new Date().toISOString()
+        }
+      });
+      const saved = savedResponse?.debtMappingDocument;
+      if (!saved?.file_url || !saved?.mapping) {
+        throw new Error('Apps Script nevrátil uložený dokument mapování.');
+      }
+
+      const [mappedRecord] = mapSheetRecordsToAppRecords({
+        debtMappings: [saved.mapping]
+      }, clientIndex);
+      if (mappedRecord) {
+        setRecords((previous) => {
+          const next = [
+            mappedRecord,
+            ...previous.filter((record) => record.id !== mappedRecord.id)
+          ].sort(compareTimelineRecordsDesc);
+          if (!hasFirebaseConfig || !db) saveLocalRecords(next);
+          return next;
+        });
+      }
+      setDebtMappingResult(saved);
+      setFlash(
+        `${saved.created ? 'Dokument byl vytvořen' : 'Dokument byl aktualizován'} a zařazen do klientské osy (${formatDateLabel(saved.activity_date)}).`
+      );
+    } catch (error) {
+      console.error('Debt mapping creation failed:', error);
+      setFlash(error.message || 'Vytvoření mapování závazků selhalo.');
+    } finally {
+      setIsCreatingDebtMapping(false);
+    }
   };
 
   const loadBackupStatus = async () => {
@@ -7960,7 +8081,43 @@ ${rawPlanOutput}` }] }],
                       title={selectedClient.fullName}
                       titleClassName="!text-2xl !font-black !text-indigo-950"
                       className="!border-indigo-300 !border-t-4 !border-t-indigo-600 !bg-white"
+                      action={
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                          {(debtMappingResult?.file_url || selectedDebtMappingRecord?.documentUrl) && (
+                            <a
+                              href={debtMappingResult?.file_url || selectedDebtMappingRecord?.documentUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-900 transition hover:bg-amber-100"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Otevřít mapování
+                            </a>
+                          )}
+                          <button
+                            type="button"
+                            onClick={createDebtMappingDocument}
+                            disabled={isCreatingDebtMapping}
+                            className="inline-flex items-center gap-2 rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            {isCreatingDebtMapping
+                              ? <Loader2 className="h-4 w-4 animate-spin" />
+                              : <Sparkles className="h-4 w-4" />}
+                            {isCreatingDebtMapping
+                              ? 'Vytvářím mapování…'
+                              : selectedDebtMappingRecord
+                                ? 'Aktualizovat mapování'
+                                : 'Vytvořit mapování závazků'}
+                          </button>
+                        </div>
+                      }
                     >
+                      {(debtMappingResult || selectedDebtMappingRecord) && (
+                        <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+                          <span className="font-bold">Dokument je součástí klientské osy.</span>{' '}
+                          {debtMappingResult?.timeline_basis || selectedDebtMappingRecord?.payload?.timelineBasis || 'Datum bylo určeno z průběhu podpory.'}
+                        </div>
+                      )}
                       {selectedClientSupportBreakdown.byType.length === 0 ?(
                         <EmptyState icon={BarChart3} title="U klienta zatím nejsou evidované žádné podpory." />
                       ) : (
@@ -8095,7 +8252,18 @@ ${rawPlanOutput}` }] }],
                                         <Download className="h-3 w-3" />
                                         Stáhnout
                                       </button>
-                                      {!record.isSynthetic && !isLegacyReadOnly && (
+                                      {record.documentUrl && (
+                                        <a
+                                          href={record.documentUrl}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800 transition hover:bg-amber-100"
+                                        >
+                                          <ExternalLink className="h-3 w-3" />
+                                          Otevřít originál
+                                        </a>
+                                      )}
+                                      {!record.isSynthetic && !isLegacyReadOnly && !record.isGeneratedReadOnly && (
                                         <>
                                           <button
                                             type="button"

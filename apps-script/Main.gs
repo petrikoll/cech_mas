@@ -24,6 +24,9 @@ function doGet(e) {
     if (action === 'listPaymentPlans') {
       return jsonResponse_({ ok: true, paymentPlans: listPaymentPlans_(projectId) });
     }
+    if (action === 'listDebtMappings') {
+      return jsonResponse_({ ok: true, debtMappings: listDebtMappings_(projectId) });
+    }
     if (action === 'listInsolvencyVerifications') {
       return jsonResponse_({
         ok: true,
@@ -85,6 +88,17 @@ function doPost(e) {
       return jsonResponse_({
         ok: true,
         client: ensureClientFolder_(payload.klient_id, context)
+      });
+    }
+    if (action === 'saveDebtMappingDocument') {
+      return jsonResponse_({
+        ok: true,
+        debtMappingDocument: saveDebtMappingDocument_(
+          payload.client_id,
+          payload.document || {},
+          payload.metadata || {},
+          context
+        )
       });
     }
     if (action === 'savePerformance') {

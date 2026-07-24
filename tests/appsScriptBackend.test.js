@@ -435,3 +435,15 @@ test('zakládání složky kopíruje kompletní sadu a používá projektové š
   assert.match(source, /masConsentTemplateProperty/);
   assert.match(source, /action === 'ensureClientFolder'/);
 });
+
+test('mapování závazků se ukládá bez duplicit a řadí do klientské osy', () => {
+  assert.match(source, /action === 'listDebtMappings'/);
+  assert.match(source, /action === 'saveDebtMappingDocument'/);
+  assert.match(source, /name: 'DebtMappings'/);
+  assert.match(source, /function saveDebtMappingDocument_/);
+  assert.match(source, /findGoogleDocumentByName_/);
+  assert.match(source, /upsertDataObject_\(DATA_SHEETS\.debtMappings, 'mapping_id'/);
+  assert.match(source, /První výkon mapování B1–B3/);
+  assert.match(source, /Nejpozději jeden měsíc od první evidované podpory/);
+  assert.match(source, /Den před prvním podáním oddlužení/);
+});

@@ -250,6 +250,14 @@ test('E.L.A.I. právní poradce je samostatný list s původním whitelistem a A
   assert.match(helperClient, /\/elai-helper\/data\/whitelist-merged\.json/);
 });
 
+test('mapování závazků se vytváří jako dokument klienta a zobrazuje v ose bez započtení podpory', () => {
+  assert.match(appSource, /action: 'saveDebtMappingDocument'/);
+  assert.match(appSource, /fetch\('\/api\/debt-mapping'/);
+  assert.match(appSource, /'debt_mapping_document'/);
+  assert.match(appSource, /Vytvořit mapování závazků/);
+  assert.match(appSource, /isGeneratedReadOnly/);
+});
+
 test('ISIR zachovává původní práci s PDF bez ručního importu klientů v rozhraní', () => {
   const isirViewSource = readFileSync(
     new URL('../src/app/IsirView.jsx', import.meta.url),

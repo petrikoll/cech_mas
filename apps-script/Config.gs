@@ -77,6 +77,15 @@ const DATA_SHEETS = Object.freeze({
       'created_at', 'created_by', 'updated_at', 'updated_by'
     ])
   }),
+  debtMappings: Object.freeze({
+    name: 'DebtMappings',
+    headers: Object.freeze([
+      'mapping_id', 'project_id', 'client_id', 'client_number',
+      'activity_date', 'timeline_basis', 'title', 'document_text',
+      'file_id', 'file_url', 'folder_id', 'folder_url', 'model',
+      'sources_json', 'created_at', 'created_by', 'updated_at', 'updated_by'
+    ])
+  }),
   paymentPlans: Object.freeze({
     name: 'PaymentPlans',
     headers: Object.freeze([

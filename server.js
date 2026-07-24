@@ -13,6 +13,7 @@ import { handleIsirAiQueueRequest } from './isirAiQueueEndpoint.js';
 import { handleIsirDocumentRequest } from './isirDocumentProxy.js';
 import documentCreatorApp from './document-creator/app.js';
 import { handleElaiLegalRequest } from './elaiHelperService.js';
+import { handleDebtMappingRequest } from './debtMappingService.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const distDir = resolve(__dirname, 'dist');
@@ -147,6 +148,11 @@ const server = createServer((request, response) => {
 
   if (url.pathname === '/api/gemini') {
     void handleGeminiProxyRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/debt-mapping') {
+    void handleDebtMappingRequest(request, response);
     return;
   }
 
