@@ -114,6 +114,7 @@ export default function IsirView({
   onCheckProject,
   onArchiveDocument,
   onAnalyzeDocuments,
+  onApplyDataCorrections,
   onMarkDocumentsSeen,
   onExportCaseStudy,
   onImportLegacyData,
@@ -132,6 +133,9 @@ export default function IsirView({
   const [archivingDocumentId, setArchivingDocumentId] = useState('');
   const [analysisTab, setAnalysisTab] = useState('current');
   const [localAnalysisByCase, setLocalAnalysisByCase] = useState({});
+  const [localVerificationByCase, setLocalVerificationByCase] = useState({});
+  const [selectedCorrectionFields, setSelectedCorrectionFields] = useState([]);
+  const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
   const importInputRef = useRef(null);
 
   const verificationByClient = useMemo(
@@ -151,6 +155,7 @@ export default function IsirView({
   const latestAnalysisByCase = useMemo(() => {
     const map = {};
     analyses
+      .filter((item) => !item.kind || item.kind === 'CASE_DOCUMENT_ANALYSIS')
       .slice()
       .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
       .forEach((item) => {
@@ -158,6 +163,17 @@ export default function IsirView({
       });
     return { ...map, ...localAnalysisByCase };
   }, [analyses, localAnalysisByCase]);
+  const latestVerificationByCase = useMemo(() => {
+    const map = {};
+    analyses
+      .filter((item) => item.kind === 'DATA_VERIFICATION')
+      .slice()
+      .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
+      .forEach((item) => {
+        if (!map[item.case_id]) map[item.case_id] = item;
+      });
+    return { ...map, ...localVerificationByCase };
+  }, [analyses, localVerificationByCase]);
 
   const clientRows = useMemo(() => clients.map((client) => {
     const clientCases = (casesByClient[client.id] || [])
@@ -216,6 +232,10 @@ export default function IsirView({
       String(right.event_date || '').localeCompare(String(left.event_date || '')))
     : [];
   const selectedAnalysis = selectedCase ? latestAnalysisByCase[selectedCase.case_id] || null : null;
+  const selectedVerification = selectedCase ? latestVerificationByCase[selectedCase.case_id] || null : null;
+  const selectedVerificationResult = selectedVerification?.result
+    || safeParse(selectedVerification?.result_json, {});
+  const dataVerification = selectedVerificationResult.data_verification || {};
   const parsedAnalysisResult = selectedAnalysis?.result
     || safeParse(selectedAnalysis?.result_json || selectedCase?.ai_summary_json, {});
   const legacyCaseStudy = parsedAnalysisResult.case_study || selectedCase?.ai_case_study || '';
@@ -226,6 +246,14 @@ export default function IsirView({
     finances: parsedAnalysisResult.finances || {},
     case_study: legacyCaseStudy
   };
+  const documentSummaries = selectedCaseDocuments
+    .map((document) => {
+      const summary = safeParse(document.analysis_json, {});
+      return summary?.summary_text
+        ? { ...summary, document_id: document.document_id, title: summary.title || document.title }
+        : null;
+    })
+    .filter(Boolean);
 
   const checkedCount = clientRows.filter((row) => row.verification).length;
   const foundCount = clientRows.filter((row) => row.clientCases.length).length;
@@ -249,13 +277,64 @@ export default function IsirView({
 
   const runAnalysis = async () => {
     const chosen = selectedCaseDocuments.filter((item) => selectedDocumentIds.includes(item.document_id));
+    const documentAnalysis = await onAnalyzeDocuments({
+      client: selectedRow.client,
+      caseItem: selectedCase,
+      documents: chosen,
+      mode: 'document-summary'
+    });
+    const summaryById = Object.fromEntries(
+      (documentAnalysis?.result?.document_summaries || [])
+        .map((item) => [String(item.document_id), item])
+    );
     const analysis = await onAnalyzeDocuments({
       client: selectedRow.client,
       caseItem: selectedCase,
-      documents: chosen
+      documents: chosen.map((document) => ({
+        ...document,
+        analysis_json: summaryById[String(document.document_id)]
+          ? JSON.stringify(summaryById[String(document.document_id)])
+          : document.analysis_json
+      })),
+      mode: 'case-study'
     });
     setLocalAnalysisByCase((previous) => ({ ...previous, [selectedCase.case_id]: analysis }));
     setAnalysisTab('current');
+  };
+
+  const runDataVerification = async () => {
+    const mainDocuments = selectedCaseDocuments.filter((item) => isTruthy(item.is_main));
+    const chosen = (mainDocuments.length ? mainDocuments : selectedCaseDocuments)
+      .slice()
+      .sort((left, right) => {
+        const leftPriority = /přihláška.*pohledáv|přezkum|plnění|splnění|vyúčtování/i.test(left.title || '') ? 1 : 0;
+        const rightPriority = /přihláška.*pohledáv|přezkum|plnění|splnění|vyúčtování/i.test(right.title || '') ? 1 : 0;
+        return rightPriority - leftPriority || String(right.event_date || '').localeCompare(String(left.event_date || ''));
+      })
+      .slice(0, 10);
+    if (!chosen.length) throw new Error('Pro kontrolu nejsou k dispozici žádné hlavní dokumenty.');
+    const analysis = await onAnalyzeDocuments({
+      client: selectedRow.client,
+      caseItem: selectedCase,
+      documents: chosen,
+      mode: 'data-verification'
+    });
+    setLocalVerificationByCase((previous) => ({ ...previous, [selectedCase.case_id]: analysis }));
+    const corrections = analysis?.result?.data_verification?.recommended_corrections || [];
+    setSelectedCorrectionFields(corrections.map((item) => item.field));
+  };
+
+  const applyCorrections = async () => {
+    const corrections = (dataVerification.recommended_corrections || [])
+      .filter((item) => selectedCorrectionFields.includes(item.field));
+    if (!corrections.length) return;
+    setIsApplyingCorrections(true);
+    try {
+      await onApplyDataCorrections({ caseItem: selectedCase, corrections });
+      setSelectedCorrectionFields([]);
+    } finally {
+      setIsApplyingCorrections(false);
+    }
   };
 
   const archiveDocument = async (documentId) => {
@@ -363,12 +442,71 @@ export default function IsirView({
                     <h3 className="text-base font-black text-slate-800">Dokumenty</h3>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-extrabold text-slate-500">Vybráno: {selectedDocumentIds.length}</span>
+                      <button
+                        type="button"
+                        onClick={runDataVerification}
+                        disabled={isAnalyzing || !selectedCaseDocuments.length}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 text-xs font-extrabold text-sky-800 hover:bg-sky-100 disabled:opacity-60"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5" />
+                        Zkontrolovat údaje
+                      </button>
                       <button type="button" onClick={runAnalysis} disabled={!selectedDocumentIds.length || isAnalyzing || selectedDocumentIds.length > 10} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#dcc5a9] bg-[#f6f2ec] px-3 text-xs font-extrabold text-slate-600 hover:bg-[#efe7dc] disabled:cursor-not-allowed disabled:opacity-60">
                         {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                         Vytvořit AI shrnutí
                       </button>
                     </div>
                   </div>
+                  {selectedVerification && (
+                    <div className="border-t border-sky-100 bg-sky-50/60 px-4 py-3">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-sky-700">Kontrolní návrhy změn údajů</p>
+                          <p className="mt-1 text-xs text-slate-700">
+                            {dataVerification.safe_summary || dataVerification.overall_result || 'Kontrola byla dokončena.'}
+                          </p>
+                        </div>
+                        {(dataVerification.recommended_corrections || []).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={applyCorrections}
+                            disabled={isApplyingCorrections || !selectedCorrectionFields.length}
+                            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-2 text-xs font-extrabold text-white disabled:opacity-50"
+                          >
+                            {isApplyingCorrections ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                            Potvrdit vybrané změny
+                          </button>
+                        )}
+                      </div>
+                      {(dataVerification.recommended_corrections || []).length ? (
+                        <div className="mt-3 grid gap-2 lg:grid-cols-2">
+                          {dataVerification.recommended_corrections.map((correction) => (
+                            <label key={correction.field} className="flex cursor-pointer gap-2 rounded-lg border border-sky-200 bg-white p-2.5 text-xs">
+                              <input
+                                type="checkbox"
+                                checked={selectedCorrectionFields.includes(correction.field)}
+                                onChange={() => setSelectedCorrectionFields((previous) =>
+                                  previous.includes(correction.field)
+                                    ? previous.filter((field) => field !== correction.field)
+                                    : [...previous, correction.field]
+                                )}
+                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-700"
+                              />
+                              <span>
+                                <strong className="block text-slate-900">{correction.label || correction.field}</strong>
+                                <span className="mt-0.5 block text-slate-600">
+                                  {String(correction.current_value ?? 'prázdné')} → <strong>{String(correction.proposed_value ?? 'prázdné')}</strong>
+                                </span>
+                                {correction.reason && <span className="mt-1 block text-[10px] leading-4 text-slate-500">{correction.reason}</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-2 text-xs font-bold text-emerald-700">Nebyly nalezeny žádné bezpečné návrhy změn.</p>
+                      )}
+                    </div>
+                  )}
                   <div className="overflow-x-auto px-4 pb-2 pt-2" aria-label="Seznam PDF dokumentů">
                     <div className="flex min-w-max gap-2">
                     {selectedCaseDocuments.map((document) => {
@@ -499,15 +637,59 @@ export default function IsirView({
                         </nav>
                         <div className="mt-3 border-t border-amber-200 pt-3">
                           <p className="text-[9px] font-extrabold uppercase tracking-wide text-amber-900/60">Minimalizovaná shrnutí</p>
-                          <p className="mt-1 text-[10px] leading-4 text-amber-950/65">Uložená shrnutí dokumentů se zobrazí zde po jejich vytvoření.</p>
+                          {documentSummaries.length ? (
+                            <div className="mt-2 space-y-1.5">
+                              {documentSummaries.map((summary) => (
+                                <button
+                                  key={summary.document_id}
+                                  type="button"
+                                  onClick={() => setAnalysisTab(`document:${summary.document_id}`)}
+                                  className={`w-full rounded-lg border p-2 text-left transition ${
+                                    analysisTab === `document:${summary.document_id}`
+                                      ? 'border-sky-400 bg-sky-50'
+                                      : 'border-amber-200 bg-white hover:bg-amber-50'
+                                  }`}
+                                >
+                                  <strong className="block truncate text-[10px] text-slate-800">{summary.title}</strong>
+                                  <span className="mt-1 block line-clamp-3 text-[9px] leading-3.5 text-slate-600">
+                                    {summary.minimal_summary || summary.summary_text}
+                                  </span>
+                                  {summary.specialized_reader === 'debt_relief_structured_report' && (
+                                    <span className="mt-1 inline-block rounded bg-violet-50 px-1.5 py-0.5 text-[8px] font-extrabold text-violet-700">
+                                      formulářově vytěženo
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="mt-1 text-[10px] leading-4 text-amber-950/65">Uložená shrnutí dokumentů se zobrazí zde po jejich vytvoření.</p>
+                          )}
                         </div>
                       </aside>
 
                       <section className="rounded-xl border border-sky-200 bg-white p-4">
                         <h3 className="text-base font-black text-slate-950">
-                          {analysisTab === 'current' ? 'Aktuální stav a co řešit' : 'Vývoj řízení'}
+                          {analysisTab === 'current'
+                            ? 'Aktuální stav a co řešit'
+                            : analysisTab === 'evolution'
+                              ? 'Vývoj řízení'
+                              : 'Shrnutí dokumentu'}
                         </h3>
-                        {analysisTab === 'current' ? (
+                        {analysisTab.startsWith('document:') ? (
+                          (() => {
+                            const documentId = analysisTab.slice('document:'.length);
+                            const summary = documentSummaries.find((item) => String(item.document_id) === documentId);
+                            return summary ? (
+                              <div className="mt-4">
+                                <p className="text-xs font-bold text-slate-500">{summary.title}</p>
+                                <div className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">
+                                  {summary.summary_text}
+                                </div>
+                              </div>
+                            ) : <p className="mt-4 text-sm text-slate-500">Shrnutí dokumentu už není k dispozici.</p>;
+                          })()
+                        ) : analysisTab === 'current' ? (
                           <div className="mt-4 space-y-4">
                             <div><h4 className="text-xs font-black text-slate-900">Stav nyní</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.status_now || 'Neuvedeno'}</p></div>
                             <div><h4 className="text-xs font-black text-slate-900">Nejbližší termíny</h4><div className="mt-1.5"><AnalysisList items={analysisResult.nearest_deadlines} /></div></div>

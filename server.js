@@ -9,6 +9,7 @@ import { handleGoogleAppsScriptProxy } from './googleAppsScriptProxy.js';
 import { handleGeminiProxyRequest } from './geminiProxy.js';
 import { handleIsirRequest } from './isirService.js';
 import { handleIsirAnalysisRequest } from './isirAnalysis.js';
+import { handleIsirAiQueueRequest } from './isirAiQueueEndpoint.js';
 import { handleIsirDocumentRequest } from './isirDocumentProxy.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -125,6 +126,11 @@ const server = createServer((request, response) => {
 
   if (url.pathname === '/api/isir-analysis') {
     void handleIsirAnalysisRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/api/isir-ai-jobs') {
+    void handleIsirAiQueueRequest(request, response, url);
     return;
   }
 

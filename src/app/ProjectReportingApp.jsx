@@ -4609,6 +4609,13 @@ function App() {
         : 'ISIR ověřen: bez započitatelného vstupu do insolvence od 1. 3. 2026.';
       setProjectInsolvencyNotice(message);
       if (!options.silent) setFlash(message);
+      if (matched && !options.silent && (snapshot.documents || []).some((item) =>
+        /^(ano|true|1)$/i.test(String(item.is_new || '')) && !item.analysis_json
+      )) {
+        window.setTimeout(() => {
+          void runAutomaticIsirAi(snapshot, client);
+        }, 0);
+      }
       return snapshot;
     } catch (error) {
       console.error('ISIR verification failed:', error);
@@ -4697,7 +4704,7 @@ function App() {
     }
   };
 
-  const analyzeIsirDocuments = async ({ client, caseItem, documents }) => {
+  const analyzeIsirDocuments = async ({ client, caseItem, documents, mode = 'document-summary' }) => {
     if (!client || !caseItem || !Array.isArray(documents) || !documents.length) {
       throw new Error('Vyberte alespoň jeden dokument k analýze.');
     }
@@ -4706,10 +4713,11 @@ function App() {
       `Gemini analyzuje ${documents.length} PDF ve spise ${caseItem.case_number || 'ISIR'}…`
     );
     try {
-      const response = await fetch('/api/isir-analysis', {
+      const response = await fetch('/api/isir-ai-jobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          mode,
           client: {
             id: client.id,
             projectId: client.projectId,
@@ -4727,18 +4735,36 @@ function App() {
         })
       });
       const payload = await response.json().catch(() => ({}));
-      if (!response.ok || payload.ok === false || !payload.analysis) {
+      if (!response.ok || payload.ok === false || !payload.job) {
         throw new Error(payload.error || `Analýza ISIR selhala: ${response.status}`);
       }
+      let job = payload.job;
+      while (job.status === 'queued' || job.status === 'running') {
+        const position = job.position ? ` · pořadí ${job.position}` : '';
+        setProjectInsolvencyNotice(
+          `${job.message || 'AI úloha probíhá'} · ${Math.round(job.progress || 0)} %${position}`
+        );
+        await new Promise((resolve) => window.setTimeout(resolve, 1200));
+        const statusResponse = await fetch(`/api/isir-ai-jobs?id=${encodeURIComponent(job.job_id)}`);
+        const statusPayload = await statusResponse.json().catch(() => ({}));
+        if (!statusResponse.ok || !statusPayload.job) {
+          throw new Error(statusPayload.error || 'Stav AI úlohy se nepodařilo načíst.');
+        }
+        job = statusPayload.job;
+      }
+      if (job.status !== 'completed' || !job.result) {
+        throw new Error(job.error || 'AI úloha nebyla dokončena.');
+      }
+      const completedAnalysis = job.result;
       const saved = await postGoogleSheetAction({
         action: 'saveInsolvencyAnalysis',
-        analysis: payload.analysis
+        analysis: completedAnalysis
       });
       const savedResult = saved?.result || {};
       const storedAnalysis = {
-        ...(savedResult.analysis || payload.analysis),
-        result: payload.analysis.result,
-        result_json: JSON.stringify(payload.analysis.result || {})
+        ...(savedResult.analysis || completedAnalysis),
+        result: completedAnalysis.result,
+        result_json: JSON.stringify(completedAnalysis.result || {})
       };
       setInsolvencyAnalyses((previous) => [
         storedAnalysis,
@@ -4753,7 +4779,11 @@ function App() {
         const byId = Object.fromEntries(savedResult.documents.map((item) => [item.document_id, item]));
         setInsolvencyDocuments((previous) => previous.map((item) => byId[item.document_id] || item));
       }
-      const message = `AI analýza ${documents.length} dokumentů byla dokončena a uložena.`;
+      const message = mode === 'data-verification'
+        ? 'Kontrolní návrhy změn byly připraveny. Nic se nezměnilo bez vašeho potvrzení.'
+        : mode === 'case-study'
+          ? 'AI kazuistika byla dokončena a uložena.'
+          : `Samostatná shrnutí ${documents.length} dokumentů byla dokončena a uložena.`;
       setProjectInsolvencyNotice(message);
       setFlash(message);
       return storedAnalysis;
@@ -4764,6 +4794,60 @@ function App() {
       throw error;
     } finally {
       setIsAnalyzingInsolvency(false);
+    }
+  };
+
+  const applyIsirDataCorrections = async ({ caseItem, corrections }) => {
+    const result = await postGoogleSheetAction({
+      action: 'applyInsolvencyDataCorrections',
+      case_id: caseItem.case_id,
+      corrections
+    });
+    if (!result?.case) throw new Error('Potvrzené opravy se nepodařilo uložit.');
+    setInsolvencyCases((previous) => previous.map((item) =>
+      item.case_id === result.case.case_id ? result.case : item
+    ));
+    setFlash(`Potvrzené opravy byly uloženy (${corrections.length}).`);
+    return result.case;
+  };
+
+  const runAutomaticIsirAi = async (snapshot, client) => {
+    const snapshotCases = Array.isArray(snapshot?.cases) ? snapshot.cases : [];
+    const snapshotDocuments = Array.isArray(snapshot?.documents) ? snapshot.documents : [];
+    for (const caseItem of snapshotCases) {
+      const newDocuments = snapshotDocuments
+        .filter((item) =>
+          item.case_id === caseItem.case_id
+          && /^(ano|true|1)$/i.test(String(item.is_new || ''))
+          && !item.analysis_json
+        )
+        .slice(0, 10);
+      if (!newDocuments.length) continue;
+      try {
+        const documentAnalysis = await analyzeIsirDocuments({
+          client,
+          caseItem,
+          documents: newDocuments,
+          mode: 'document-summary'
+        });
+        const summaryById = Object.fromEntries(
+          (documentAnalysis?.result?.document_summaries || [])
+            .map((item) => [String(item.document_id), item])
+        );
+        await analyzeIsirDocuments({
+          client,
+          caseItem,
+          documents: newDocuments.map((document) => ({
+            ...document,
+            analysis_json: summaryById[String(document.document_id)]
+              ? JSON.stringify(summaryById[String(document.document_id)])
+              : document.analysis_json
+          })),
+          mode: 'case-study'
+        });
+      } catch (error) {
+        console.error('Automatic ISIR AI queue failed:', error);
+      }
     }
   };
 
@@ -8424,6 +8508,7 @@ ${rawPlanOutput}` }] }],
               onCheckProject={verifyProjectInsolvencies}
               onArchiveDocument={archiveIsirDocument}
               onAnalyzeDocuments={analyzeIsirDocuments}
+              onApplyDataCorrections={applyIsirDataCorrections}
               onMarkDocumentsSeen={markIsirDocumentsSeen}
               onExportCaseStudy={exportIsirCaseStudy}
               onImportLegacyData={importLegacyIsirData}

@@ -143,6 +143,16 @@ function doPost(e) {
         result: saveInsolvencyAnalysis_(payload.analysis || {}, context)
       });
     }
+    if (action === 'applyInsolvencyDataCorrections') {
+      return jsonResponse_({
+        ok: true,
+        case: applyInsolvencyDataCorrections_(
+          payload.case_id,
+          payload.corrections || [],
+          context
+        )
+      });
+    }
     if (action === 'markIsirDocumentsSeen') {
       return jsonResponse_({
         ok: true,

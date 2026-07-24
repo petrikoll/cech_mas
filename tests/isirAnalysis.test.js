@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  minimizeSummary,
   normalizeIsirPdfUrl,
+  normalizedCorrections,
   parseGeminiJson,
   parseGeminiText
 } from '../isirAnalysis.js';
@@ -9,6 +11,13 @@ import {
   CASE_STUDY_ANALYSIS_PROMPT,
   CASE_STUDY_FINAL_PROMPT
 } from '../isirPrompts.js';
+import {
+  CLAIM_AMOUNT_EXTRACTION_PROMPT,
+  DATA_VERIFICATION_PROMPT,
+  STRUCTURED_REPORT_EXTRACTION_PROMPT,
+  isClaimApplicationDocument,
+  isStructuredIsirDocument
+} from '../isirDocumentPrompts.js';
 
 test('ISIR AI přijme pouze oficiální PDF adresu', () => {
   assert.match(
@@ -43,4 +52,28 @@ test('ISIR AI používá původní dvoukrokovou logiku kazuistiky a Gemini 2.5 F
   assert.equal(parseGeminiText({
     candidates: [{ content: { parts: [{ text: '[[SECTION:current:Aktuální stav a co řešit]]\\nStav nyní:\\nProbíhá.' }] } }]
   }), '[[SECTION:current:Aktuální stav a co řešit]]\\nStav nyní:\\nProbíhá.');
+});
+
+test('ISIR AI rozlišuje formulářová PDF a přihlášky pohledávek', () => {
+  assert.equal(isStructuredIsirDocument({ title: 'Zpráva o plnění oddlužení' }), true);
+  assert.equal(isStructuredIsirDocument({ title: 'Běžné usnesení soudu' }), false);
+  assert.equal(isClaimApplicationDocument({ title: 'Přihláška pohledávky' }), true);
+  assert.match(STRUCTURED_REPORT_EXTRACTION_PROMPT, /reviewed_unsecured_claims_total/);
+  assert.match(CLAIM_AMOUNT_EXTRACTION_PROMPT, /V\. Pohledávky celkem/);
+});
+
+test('minimalizované shrnutí zachová jen stručnou sekci', () => {
+  const value = minimizeSummary(
+    '[[SECTION:summary:Shrnutí]]\nKrátké věcné shrnutí.\n[[SECTION:deadlines:Lhůty a povinnosti]]\nBez lhůt.'
+  );
+  assert.equal(value, 'Krátké věcné shrnutí.');
+});
+
+test('kontrolní návrhy nepustí nepovolená pole', () => {
+  const corrections = normalizedCorrections([
+    { field: 'claims_total_amount', proposed_value: 1200 },
+    { field: 'client_name', proposed_value: 'Jiný klient' }
+  ]);
+  assert.deepEqual(corrections.map((item) => item.field), ['claims_total_amount']);
+  assert.match(DATA_VERIFICATION_PROMPT, /Nic neopravuj automaticky/);
 });

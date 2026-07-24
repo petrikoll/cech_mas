@@ -237,3 +237,16 @@ test('ISIR imports a saved local archive without another Gemini call', () => {
   assert.match(appSource, /Gemini nebyl spuštěn/);
   assert.match(appSource, /Datum narození nesouhlasí/);
 });
+
+test('ISIR AI používá frontu, samostatná shrnutí a potvrzované návrhy oprav', () => {
+  const isirSource = readFileSync(new URL('../src/app/IsirView.jsx', import.meta.url), 'utf8');
+  const serverSource = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+
+  assert.match(serverSource, /\/api\/isir-ai-jobs/);
+  assert.match(appSource, /job\.status === 'queued' \|\| job\.status === 'running'/);
+  assert.match(appSource, /mode: 'document-summary'/);
+  assert.match(appSource, /mode: 'case-study'/);
+  assert.match(isirSource, /Minimalizovaná shrnutí/);
+  assert.match(isirSource, /Zkontrolovat údaje/);
+  assert.match(isirSource, /Potvrdit vybrané změny/);
+});

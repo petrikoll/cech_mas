@@ -236,7 +236,18 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
   const caseStudy = normalizeText_(result.case_study).slice(0, 45000);
   const summary = Object.assign({}, result);
   delete summary.case_study;
-  const resultJson = JSON.stringify(summary);
+  let resultJson = JSON.stringify(summary);
+  if (resultJson.length > 45000 && Array.isArray(summary.document_summaries)) {
+    resultJson = JSON.stringify({
+      document_summaries: summary.document_summaries.map((item) => ({
+        document_id: item.document_id,
+        title: item.title,
+        minimal_summary: item.minimal_summary,
+        specialized_reader: item.specialized_reader,
+        confidence: item.confidence
+      }))
+    });
+  }
   if (resultJson.length > 45000) {
     throw new Error('AI analýza je příliš rozsáhlá pro bezpečné uložení.');
   }
@@ -261,18 +272,21 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
   upsertDataObject_(DATA_SHEETS.insolvencyAnalyses, 'analysis_id', analysisId, row);
 
   const finance = summary.finances && typeof summary.finances === 'object' ? summary.finances : {};
-  updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
-    claims_count: Number(finance.reviewed_claims_count) || caseRow.claims_count || 0,
-    claims_total_amount: Number(finance.claims_total_amount) || caseRow.claims_total_amount || '',
-    ai_status: 'OK',
-    ai_model: row.model,
-    ai_checked_at: timestamp,
-    ai_summary_json: resultJson,
-    ai_case_study: caseStudy,
-    ai_case_study_at: timestamp,
-    updated_at: timestamp,
-    updated_by: context.actorId
-  }));
+  const isCaseStudy = row.kind === 'CASE_DOCUMENT_ANALYSIS';
+  if (isCaseStudy) {
+    updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
+      claims_count: Number(finance.reviewed_claims_count) || caseRow.claims_count || 0,
+      claims_total_amount: Number(finance.claims_total_amount) || caseRow.claims_total_amount || '',
+      ai_status: 'OK',
+      ai_model: row.model,
+      ai_checked_at: timestamp,
+      ai_summary_json: resultJson,
+      ai_case_study: caseStudy,
+      ai_case_study_at: timestamp,
+      updated_at: timestamp,
+      updated_by: context.actorId
+    }));
+  }
 
   const documentSummaries = Array.isArray(summary.document_summaries)
     ? summary.document_summaries
@@ -312,6 +326,58 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
     case: listInsolvencyCases_(context.projectId).find((item) => item.case_id === caseId),
     documents: listInsolvencyDocuments_(context.projectId).filter((item) => item.case_id === caseId)
   };
+}
+
+function applyInsolvencyDataCorrections_(caseIdInput, correctionsInput, context) {
+  const caseId = normalizeText_(caseIdInput);
+  const caseRow = readDataObjects_(DATA_SHEETS.insolvencyCases)
+    .find((row) => String(row.case_id || '') === caseId);
+  if (!caseRow || caseRow.project_id !== context.projectId) {
+    throw new Error('Řízení pro potvrzení oprav nebylo v projektu nalezeno.');
+  }
+  const allowedFields = {
+    case_status: 'text',
+    proceeding_started_at: 'date',
+    proceeding_ended_at: 'date',
+    claims_deadline: 'date',
+    claims_count: 'integer',
+    claims_total_amount: 'number',
+    last_event_at: 'date',
+    last_event_title: 'text'
+  };
+  const corrections = Array.isArray(correctionsInput) ? correctionsInput : [];
+  if (!corrections.length) throw new Error('Nebyla vybrána žádná navržená oprava.');
+
+  const updated = Object.assign({}, caseRow);
+  const applied = [];
+  corrections.forEach((correction) => {
+    const field = normalizeText_(correction && correction.field);
+    const type = allowedFields[field];
+    if (!type) throw new Error('Pole "' + field + '" nelze tímto způsobem změnit.');
+    let value = correction.proposed_value;
+    if (type === 'integer') {
+      value = Number(value);
+      if (!isFinite(value) || value < 0 || Math.floor(value) !== value) {
+        throw new Error('Navržený počet není platné celé číslo.');
+      }
+    } else if (type === 'number') {
+      value = Number(value);
+      if (!isFinite(value) || value < 0) throw new Error('Navržená částka není platná.');
+    } else {
+      value = normalizeText_(value);
+      if (type === 'date' && value && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+        throw new Error('Navržené datum musí být ve formátu RRRR-MM-DD.');
+      }
+    }
+    updated[field] = value;
+    applied.push(field);
+  });
+  updated.updated_at = nowIso_();
+  updated.updated_by = context.actorId;
+  updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, updated);
+  writeAudit_(context, 'APPLY_ISIR_DATA_CORRECTIONS', 'ISIR_CASE', caseId, 'OK',
+    'fields=' + applied.join(','));
+  return listInsolvencyCases_(context.projectId).find((item) => item.case_id === caseId);
 }
 
 function markIsirDocumentsSeen_(caseIdInput, context) {

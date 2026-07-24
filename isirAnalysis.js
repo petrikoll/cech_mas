@@ -3,6 +3,16 @@ import {
   buildCaseStudyFinalPrompt,
   buildCaseStudyShorteningPrompt
 } from './isirPrompts.js';
+import {
+  CLAIM_AMOUNT_EXTRACTION_PROMPT,
+  STRUCTURED_REPORT_EXTRACTION_PROMPT,
+  buildDataVerificationPrompt,
+  buildDocumentAnalysisPrompt,
+  buildDocumentFinalPrompt,
+  buildStructuredFinalPrompt,
+  isClaimApplicationDocument,
+  isStructuredIsirDocument
+} from './isirDocumentPrompts.js';
 
 const MAX_REQUEST_BYTES = 512 * 1024;
 const MAX_DOCUMENTS = 10;
@@ -66,8 +76,20 @@ function parseGeminiText(payload) {
     ?.map((part) => part.text || '')
     .join('')
     .trim();
-  if (!text) throw new Error('Gemini nevrátil text kazuistiky.');
+  if (!text) throw new Error('Gemini nevrátil text analýzy.');
   return stripJsonFence(text);
+}
+
+function sectionText(value, key) {
+  const text = String(value || '');
+  const pattern = new RegExp(`\\[\\[SECTION:${key}:[^\\]]+\\]\\]\\s*([\\s\\S]*?)(?=\\[\\[SECTION:|$)`, 'i');
+  return (text.match(pattern)?.[1] || '').trim();
+}
+
+function minimizeSummary(value) {
+  const summary = sectionText(value, 'summary') || String(value || '');
+  const compact = summary.replace(/\s+/g, ' ').trim();
+  return compact.length > 280 ? `${compact.slice(0, 277).trim()}…` : compact;
 }
 
 async function generateGemini({ apiKey, parts, json = false, fetchImpl, signal }) {
@@ -112,11 +134,124 @@ async function fetchSelectedPdfs(documents, fetchImpl) {
     }
     totalBytes += buffer.length;
     if (totalBytes > MAX_PDF_BYTES) {
-      throw new Error('Vybrané dokumenty jsou pro jednu analýzu příliš velké. Vyberte menší počet PDF.');
+      throw new Error('Vybrané dokumenty jsou pro jednu analýzu příliš velké.');
     }
     result.push({ ...document, buffer });
   }
   return result;
+}
+
+async function analyzeSingleDocument({ document, pdf, apiKey, fetchImpl, signal }) {
+  const structured = isStructuredIsirDocument(document);
+  const claimApplication = isClaimApplicationDocument(document);
+  const workingPayload = await generateGemini({
+    apiKey,
+    parts: [
+      {
+        text: claimApplication
+          ? `${CLAIM_AMOUNT_EXTRACTION_PROMPT}\n\nMETADATA:\n${JSON.stringify({
+            document_id: document.document_id,
+            title: document.title,
+            event_date: document.event_date
+          }, null, 2)}`
+          : structured
+          ? `${STRUCTURED_REPORT_EXTRACTION_PROMPT}\n\nMETADATA:\n${JSON.stringify({
+            document_id: document.document_id,
+            title: document.title,
+            event_date: document.event_date
+          }, null, 2)}`
+          : buildDocumentAnalysisPrompt(document)
+      },
+      { inlineData: { mimeType: 'application/pdf', data: pdf.buffer.toString('base64') } }
+    ],
+    json: true,
+    fetchImpl,
+    signal
+  });
+  const working = parseGeminiJson(workingPayload);
+  const normalizedWorking = claimApplication
+    ? {
+      category: 'Přihláška pohledávky',
+      working_analysis: {
+        what_document_says: working.amount == null
+          ? ['Celkovou částku se nepodařilo bezpečně vytěžit.']
+          : [`Celková přihlášená pohledávka: ${working.amount} ${working.currency || 'CZK'}.`],
+        practical_meaning_for_debt_advisor: ['Částka je určena pro kontrolní součet hlavních přihlášek.'],
+        explicit_deadlines: [],
+        explicit_debtor_obligations: [],
+        advisor_recommendations: working.amount == null ? ['Ověřit částku ručně v poli V. Pohledávky celkem.'] : [],
+        unclear_or_incomplete_information: working.amount == null ? [working.evidence || 'Cílové pole nebylo bezpečně nalezeno.'] : []
+      },
+      confidence: working.confidence || 'low'
+    }
+    : working;
+  const finalPayload = await generateGemini({
+    apiKey,
+    parts: [{
+      text: structured
+        ? buildStructuredFinalPrompt(working)
+        : buildDocumentFinalPrompt(normalizedWorking)
+    }],
+    fetchImpl,
+    signal
+  });
+  const summaryText = parseGeminiText(finalPayload);
+  return {
+    document_id: String(document.document_id || ''),
+    title: document.title || '',
+    category: normalizedWorking.category || working.document_type || document.document_type || '',
+    specialized_reader: claimApplication
+      ? 'claim_amount'
+      : structured
+        ? 'debt_relief_structured_report'
+        : 'general_document',
+    structured_extraction: structured ? working : null,
+    claim_amount_extraction: claimApplication ? working : null,
+    working_analysis: structured ? null : (normalizedWorking.working_analysis || normalizedWorking),
+    summary_text: summaryText,
+    minimal_summary: minimizeSummary(summaryText),
+    confidence: normalizedWorking.confidence || '',
+    model: GEMINI_MODEL,
+    analyzed_at: new Date().toISOString()
+  };
+}
+
+function normalizedCorrections(value) {
+  const allowed = new Set([
+    'case_status',
+    'proceeding_started_at',
+    'proceeding_ended_at',
+    'claims_deadline',
+    'claims_count',
+    'claims_total_amount',
+    'last_event_at',
+    'last_event_title'
+  ]);
+  return (Array.isArray(value) ? value : [])
+    .filter((item) => item && allowed.has(String(item.field || '')))
+    .map((item) => ({
+      field: String(item.field),
+      label: String(item.label || item.field),
+      current_value: item.current_value ?? null,
+      proposed_value: item.proposed_value ?? null,
+      source_document_id: String(item.source_document_id || ''),
+      reason: String(item.reason || ''),
+      confidence: String(item.confidence || 'low')
+    }));
+}
+
+function baseAnalysis(input, documents, kind, result) {
+  return {
+    analysis_id: `${String(input.case?.case_id || 'case')}-${kind.toLowerCase()}-${Date.now()}`,
+    case_id: String(input.case?.case_id || ''),
+    client_id: String(input.client?.id || input.client?.client_id || ''),
+    project_id: String(input.client?.projectId || input.client?.project_id || ''),
+    kind,
+    document_ids: documents.map((document) => String(document.document_id || '')),
+    model: GEMINI_MODEL,
+    created_at: new Date().toISOString(),
+    result
+  };
 }
 
 async function analyzeIsirDocuments(input, options = {}) {
@@ -129,24 +264,69 @@ async function analyzeIsirDocuments(input, options = {}) {
   }
   const documents = inputDocuments.slice(0, MAX_DOCUMENTS);
   if (!documents.length) throw new Error('Vyberte alespoň jeden dokument k analýze.');
-
+  const mode = String(input.mode || 'case-study');
   const pdfs = await fetchSelectedPdfs(documents, fetchImpl);
   const currentDate = new Date().toISOString().slice(0, 10);
-  const parts = [
-    { text: buildCaseStudyAnalysisPrompt({
-      caseItem: input.case,
-      client: input.client,
-      documents,
-      currentDate
-    }) },
-    ...pdfs.flatMap((document) => [
-      { text: `Následuje PDF s ID ${document.document_id}: ${document.title || 'Dokument ISIR'}` },
-      { inlineData: { mimeType: 'application/pdf', data: document.buffer.toString('base64') } }
-    ])
-  ];
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 240_000);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    mode === 'document-summary' ? 900_000 : 360_000
+  );
+
   try {
+    if (mode === 'document-summary') {
+      const documentSummaries = [];
+      for (let index = 0; index < documents.length; index += 1) {
+        options.onProgress?.({
+          progress: 10 + Math.round((index / documents.length) * 80),
+          message: `Čtení dokumentu ${index + 1}/${documents.length}: ${documents[index].title || 'ISIR'}`
+        });
+        documentSummaries.push(await analyzeSingleDocument({
+          document: documents[index],
+          pdf: pdfs[index],
+          apiKey,
+          fetchImpl,
+          signal: controller.signal
+        }));
+      }
+      return baseAnalysis(input, documents, 'DOCUMENT_SUMMARY', { document_summaries: documentSummaries });
+    }
+
+    if (mode === 'data-verification') {
+      options.onProgress?.({ progress: 25, message: 'Porovnávám údaje aplikace s PDF.' });
+      const payload = await generateGemini({
+        apiKey,
+        parts: [
+          { text: buildDataVerificationPrompt({ caseItem: input.case, documents }) },
+          ...pdfs.flatMap((document) => [
+            { text: `PDF dokument ID ${document.document_id}: ${document.title || 'Dokument ISIR'}` },
+            { inlineData: { mimeType: 'application/pdf', data: document.buffer.toString('base64') } }
+          ])
+        ],
+        json: true,
+        fetchImpl,
+        signal: controller.signal
+      });
+      const verification = parseGeminiJson(payload);
+      verification.recommended_corrections = normalizedCorrections(verification.recommended_corrections);
+      return baseAnalysis(input, documents, 'DATA_VERIFICATION', { data_verification: verification });
+    }
+
+    options.onProgress?.({ progress: 22, message: 'Připravuji pracovní rozbor kazuistiky.' });
+    const parts = [
+      {
+        text: buildCaseStudyAnalysisPrompt({
+          caseItem: input.case,
+          client: input.client,
+          documents,
+          currentDate
+        })
+      },
+      ...pdfs.flatMap((document) => [
+        { text: `Následuje PDF s ID ${document.document_id}: ${document.title || 'Dokument ISIR'}` },
+        { inlineData: { mimeType: 'application/pdf', data: document.buffer.toString('base64') } }
+      ])
+    ];
     const workingPayload = await generateGemini({
       apiKey,
       parts,
@@ -155,15 +335,10 @@ async function analyzeIsirDocuments(input, options = {}) {
       signal: controller.signal
     });
     const workingAnalysis = parseGeminiJson(workingPayload);
+    options.onProgress?.({ progress: 65, message: 'Kontroluji a zkracuji finální kazuistiku.' });
     const finalPayload = await generateGemini({
       apiKey,
-      parts: [{
-        text: buildCaseStudyFinalPrompt({
-          workingAnalysis,
-          caseItem: input.case,
-          currentDate
-        })
-      }],
+      parts: [{ text: buildCaseStudyFinalPrompt({ workingAnalysis, caseItem: input.case, currentDate }) }],
       fetchImpl,
       signal: controller.signal
     });
@@ -177,20 +352,10 @@ async function analyzeIsirDocuments(input, options = {}) {
       });
       caseStudy = parseGeminiText(shortenedPayload);
     }
-    return {
-      analysis_id: `${String(input.case?.case_id || 'case')}-${Date.now()}`,
-      case_id: String(input.case?.case_id || ''),
-      client_id: String(input.client?.id || input.client?.client_id || ''),
-      project_id: String(input.client?.projectId || input.client?.project_id || ''),
-      kind: 'CASE_DOCUMENT_ANALYSIS',
-      document_ids: documents.map((document) => String(document.document_id || '')),
-      model: GEMINI_MODEL,
-      created_at: new Date().toISOString(),
-      result: {
-        working_case_analysis: workingAnalysis.working_case_analysis || workingAnalysis,
-        case_study: caseStudy
-      }
-    };
+    return baseAnalysis(input, documents, 'CASE_DOCUMENT_ANALYSIS', {
+      working_case_analysis: workingAnalysis.working_case_analysis || workingAnalysis,
+      case_study: caseStudy
+    });
   } finally {
     clearTimeout(timeout);
   }
@@ -221,7 +386,9 @@ export {
   MAX_DOCUMENTS,
   analyzeIsirDocuments,
   handleIsirAnalysisRequest,
+  minimizeSummary,
   normalizeIsirPdfUrl,
+  normalizedCorrections,
   parseGeminiJson,
   parseGeminiText
 };
