@@ -7003,7 +7003,10 @@ ${rawPlanOutput}` }] }],
                                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="min-w-0">
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <label className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-sm transition ${record.isSynthetic ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-55' : selectedJourneyPrintIds.includes(record.id) ? 'cursor-pointer border-indigo-700 bg-indigo-700 text-white' : 'cursor-pointer border-slate-300 bg-white text-slate-800 hover:border-indigo-400'}`} title={record.isSynthetic ? 'Zařazení klienta není samostatný tisknutelný zápis.' : 'Zařadit zápis do společného tisku'}>
+                                        <span className="rounded-lg border border-slate-300 bg-slate-50 px-2.5 py-1.5 text-xs font-black text-slate-900">
+                                          {formatDateLabel(record.activityDate)}
+                                        </span>
+                                        <label className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-bold shadow-sm transition ${record.isSynthetic ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-55' : selectedJourneyPrintIds.includes(record.id) ? 'cursor-pointer border-indigo-700 bg-indigo-700 text-white' : 'cursor-pointer border-slate-300 bg-white text-slate-700 hover:border-indigo-400 hover:text-indigo-800'}`} title={record.isSynthetic ? 'Zařazení klienta není samostatný tisknutelný zápis.' : 'Zařadit tento zápis do společného tisku'}>
                                           <input
                                             type="checkbox"
                                             checked={selectedJourneyPrintIds.includes(record.id)}
@@ -7011,7 +7014,8 @@ ${rawPlanOutput}` }] }],
                                             onChange={() => toggleJourneyPrintSelection(record.id)}
                                             className="h-4 w-4 rounded border-slate-300 text-indigo-700 focus:ring-indigo-500"
                                           />
-                                          {formatDateLabel(record.activityDate)}
+                                          <Printer className="h-3.5 w-3.5" />
+                                          {selectedJourneyPrintIds.includes(record.id) ? 'Vybráno k tisku' : 'Vybrat k tisku'}
                                         </label>
                                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${tone.badge}`}>
                                           {meta.stage}
@@ -7035,20 +7039,18 @@ ${rawPlanOutput}` }] }],
                                       </div>
                                     </div>
                                     <div className="flex flex-nowrap items-center justify-end gap-1">
-                                      {!isLegacyReadOnly && (
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setExpandedJourneyRecordIds((prev) =>
-                                              prev.includes(record.id) ?prev.filter((item) => item !== record.id) : [...prev, record.id]
-                                            )
-                                          }
-                                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
-                                        >
-                                          <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ?'rotate-90' : ''}`} />
-                                          {isExpanded ?'Skrýt' : 'Detail'}
-                                        </button>
-                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setExpandedJourneyRecordIds((prev) =>
+                                            prev.includes(record.id) ?prev.filter((item) => item !== record.id) : [...prev, record.id]
+                                          )
+                                        }
+                                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-indigo-800 transition hover:bg-indigo-100"
+                                      >
+                                        <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ?'rotate-90' : ''}`} />
+                                        {isExpanded ?'Skrýt detail' : 'Rozkrýt detail'}
+                                      </button>
                                       <button
                                         type="button"
                                         onClick={() => exportJourneyRecord(record)}
@@ -7080,8 +7082,8 @@ ${rawPlanOutput}` }] }],
                                       )}
                                     </div>
                                   </div>
-                                  <div className="mt-3 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-800">
-                                    {isLegacyReadOnly ? detail : summary}
+                                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-700">
+                                    {summary}
                                   </div>
                                   {record.entityType === 'mentor_report_document' && (
                                     <div className="mt-2 text-xs text-emerald-800">
