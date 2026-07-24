@@ -83,12 +83,15 @@ function saveInsolvencySnapshot_(snapshot, context) {
   );
 
   const cases = Array.isArray(value.cases) ? value.cases : [];
-  cases.forEach((caseItem) => {
+  const existingCasesById = readDataObjects_(DATA_SHEETS.insolvencyCases).reduce((map, row) => {
+    map[String(row.case_id || '')] = row;
+    return map;
+  }, {});
+  const caseRows = cases.map((caseItem) => {
     const caseId = normalizeText_(caseItem.case_id);
-    if (!caseId) return;
-    const existingCase = readDataObjects_(DATA_SHEETS.insolvencyCases)
-      .find((row) => String(row.case_id || '') === caseId);
-    upsertDataObject_(DATA_SHEETS.insolvencyCases, 'case_id', caseId, {
+    if (!caseId) return null;
+    const existingCase = existingCasesById[caseId];
+    return {
       case_id: caseId,
       project_id: context.projectId,
       client_id: clientId,
@@ -116,17 +119,21 @@ function saveInsolvencySnapshot_(snapshot, context) {
       checked_at: normalizeText_(caseItem.checked_at) || timestamp,
       updated_at: timestamp,
       updated_by: context.actorId
-    });
-  });
+    };
+  }).filter(Boolean);
+  bulkUpsertDataObjects_(DATA_SHEETS.insolvencyCases, 'case_id', caseRows);
 
   const documents = Array.isArray(value.documents) ? value.documents : [];
-  documents.forEach((documentItem) => {
+  const existingDocumentsById = readDataObjects_(DATA_SHEETS.insolvencyDocuments).reduce((map, row) => {
+    map[String(row.document_id || '')] = row;
+    return map;
+  }, {});
+  const documentRows = documents.map((documentItem) => {
     const documentId = normalizeText_(documentItem.document_id);
     const caseId = normalizeText_(documentItem.case_id);
-    if (!documentId || !caseId) return;
-    const existing = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
-      .find((row) => String(row.document_id || '') === documentId);
-    upsertDataObject_(DATA_SHEETS.insolvencyDocuments, 'document_id', documentId, {
+    if (!documentId || !caseId) return null;
+    const existing = existingDocumentsById[documentId];
+    return {
       document_id: documentId,
       case_id: caseId,
       project_id: context.projectId,
@@ -148,8 +155,9 @@ function saveInsolvencySnapshot_(snapshot, context) {
       checked_at: normalizeText_(documentItem.checked_at) || timestamp,
       updated_at: timestamp,
       updated_by: context.actorId
-    });
-  });
+    };
+  }).filter(Boolean);
+  bulkUpsertDataObjects_(DATA_SHEETS.insolvencyDocuments, 'document_id', documentRows);
 
   writeAudit_(
     context,
@@ -269,12 +277,17 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
   const documentSummaries = Array.isArray(summary.document_summaries)
     ? summary.document_summaries
     : [];
-  documentSummaries.forEach((documentSummary) => {
+  const caseDocumentsById = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
+    .filter((item) => item.case_id === caseId)
+    .reduce((map, row) => {
+      map[String(row.document_id || '')] = row;
+      return map;
+    }, {});
+  const analyzedDocumentRows = documentSummaries.map((documentSummary) => {
     const documentId = normalizeText_(documentSummary.document_id);
-    const documentRow = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
-      .find((item) => String(item.document_id || '') === documentId);
-    if (!documentRow || documentRow.case_id !== caseId) return;
-    updateDataObjectAtRow_(DATA_SHEETS.insolvencyDocuments, documentRow.__rowNumber, Object.assign({}, documentRow, {
+    const documentRow = caseDocumentsById[documentId];
+    if (!documentRow) return null;
+    const updatedRow = Object.assign({}, documentRow, {
       included_in_case_study: 'Ano',
       analysis_status: 'OK',
       analysis_json: JSON.stringify(documentSummary).slice(0, 45000),
@@ -282,8 +295,15 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
       is_new: 'Ne',
       updated_at: timestamp,
       updated_by: context.actorId
-    }));
-  });
+    });
+    delete updatedRow.__rowNumber;
+    return updatedRow;
+  }).filter(Boolean);
+  bulkUpsertDataObjects_(
+    DATA_SHEETS.insolvencyDocuments,
+    'document_id',
+    analyzedDocumentRows
+  );
 
   writeAudit_(context, 'SAVE_ISIR_ANALYSIS', 'ISIR_CASE', caseId, 'OK',
     'documents=' + documentIds.length + ';model=' + row.model);
@@ -316,6 +336,50 @@ function markIsirDocumentsSeen_(caseIdInput, context) {
       updated.push(value);
     });
   return updated;
+}
+
+function readLegacyIsirMigrationFile_(fileIdInput, context) {
+  const fileId = normalizeText_(fileIdInput);
+  const file = getDriveFileByIdOrNull_(fileId);
+  if (!file) throw new Error('Importní soubor ISIR nebyl na Google Disku nalezen.');
+  const expectedFileName = context.projectId.toLowerCase() + '-isir-migration.json';
+  if (file.getName() !== expectedFileName) {
+    throw new Error('Importní soubor nepatří aktivnímu projektu.');
+  }
+  const parents = file.getParents();
+  let allowedParent = false;
+  while (parents.hasNext()) {
+    if (parents.next().getName() === 'ISIR-Kontrola – archiv lokální aplikace') {
+      allowedParent = true;
+      break;
+    }
+  }
+  if (!allowedParent) {
+    throw new Error('Importní soubor není uložen v povolené archivní složce.');
+  }
+
+  let bundle;
+  try {
+    bundle = JSON.parse(file.getBlob().getDataAsString('UTF-8'));
+  } catch (error) {
+    throw new Error('Importní soubor ISIR není platný JSON.');
+  }
+  if (
+    Number(bundle.version) !== 1 ||
+    normalizeProjectId_(bundle.project_id) !== context.projectId ||
+    !Array.isArray(bundle.entries)
+  ) {
+    throw new Error('Importní balíček ISIR má neplatnou strukturu nebo projekt.');
+  }
+  writeAudit_(
+    context,
+    'READ_LEGACY_ISIR_IMPORT',
+    'DRIVE_FILE',
+    fileId,
+    'OK',
+    'entries=' + bundle.entries.length
+  );
+  return bundle;
 }
 
 function escapeXmlText_(value) {

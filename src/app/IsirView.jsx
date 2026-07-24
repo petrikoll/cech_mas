@@ -102,6 +102,7 @@ export default function IsirView({
   onMarkDocumentsSeen,
   onExportCaseStudy,
   onImportLegacyData,
+  onImportLegacyFromDrive,
   onEditClient
 }) {
   const [query, setQuery] = useState('');
@@ -113,6 +114,7 @@ export default function IsirView({
   const [onlyNew, setOnlyNew] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
   const [expandedDocumentId, setExpandedDocumentId] = useState('');
+  const [previewDocumentId, setPreviewDocumentId] = useState('');
   const [archivingDocumentId, setArchivingDocumentId] = useState('');
   const [analysisTab, setAnalysisTab] = useState('current');
   const [localAnalysisByCase, setLocalAnalysisByCase] = useState({});
@@ -217,6 +219,7 @@ export default function IsirView({
     setSelectedClientId(row.client.id);
     setSelectedCaseId(row.latestCase?.case_id || '');
     setSelectedDocumentIds([]);
+    setPreviewDocumentId('');
     setView('detail');
   };
   const toggleStatus = (key) => setStatusFilters((previous) =>
@@ -283,6 +286,7 @@ export default function IsirView({
                 <button key={item.case_id} type="button" onClick={() => {
                   setSelectedCaseId(item.case_id);
                   setSelectedDocumentIds([]);
+                  setPreviewDocumentId('');
                 }} className={`rounded-xl px-3 py-2 text-xs font-extrabold ring-1 ${
                   selectedCase?.case_id === item.case_id
                     ? 'bg-sky-700 text-white ring-sky-700'
@@ -349,7 +353,7 @@ export default function IsirView({
                   <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                       <h3 className="text-lg font-black text-slate-950">Dokumenty ({selectedCaseDocuments.length})</h3>
-                      <p className="mt-1 text-sm text-slate-500">Vyberte až 10 PDF pro společné AI shrnutí a kazuistiku.</p>
+                      <p className="mt-1 text-sm text-slate-500">Dokument můžete rozbalit přímo zde, otevřít v nové kartě, stáhnout nebo uložit na Disk.</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {caseNewDocuments.length > 0 && (
@@ -396,8 +400,11 @@ export default function IsirView({
                                   <Bot className="h-3.5 w-3.5" /> Shrnutí <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? 'rotate-180' : ''}`} />
                                 </button>
                               )}
+                              <button type="button" onClick={() => setPreviewDocumentId(previewDocumentId === document.document_id ? '' : document.document_id)} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-bold text-sky-800 hover:bg-sky-100">
+                                <Eye className="h-3.5 w-3.5" /> {previewDocumentId === document.document_id ? 'Skrýt náhled' : 'Náhled PDF'}
+                              </button>
                               <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                                <Eye className="h-3.5 w-3.5" /> Otevřít
+                                <ExternalLink className="h-3.5 w-3.5" /> Otevřít
                               </a>
                               <a href={document.source_url} target="_blank" rel="noreferrer" download className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                                 <Download className="h-3.5 w-3.5" /> Stáhnout
@@ -413,6 +420,26 @@ export default function IsirView({
                             <div className="mx-4 mb-4 rounded-2xl border border-violet-100 bg-white p-4 text-sm leading-6 text-slate-700">
                               <strong className="text-violet-800">{documentAnalysis.category || 'AI shrnutí dokumentu'}</strong>
                               <p className="mt-1">{documentAnalysis.summary}</p>
+                            </div>
+                          )}
+                          {previewDocumentId === document.document_id && (
+                            <div className="mx-4 mb-4 overflow-hidden rounded-2xl border border-sky-200 bg-slate-100 shadow-inner">
+                              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-100 bg-white px-4 py-3">
+                                <div>
+                                  <p className="text-xs font-black uppercase tracking-wide text-sky-800">Náhled PDF</p>
+                                  <p className="mt-0.5 max-w-2xl truncate text-xs text-slate-500">{document.title}</p>
+                                </div>
+                                <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-2 text-xs font-extrabold text-white hover:bg-sky-800">
+                                  <ExternalLink className="h-3.5 w-3.5" /> Otevřít ve velkém
+                                </a>
+                              </div>
+                              <iframe
+                                src={document.drive_url || document.source_url}
+                                title={`Náhled dokumentu ${document.title}`}
+                                loading="lazy"
+                                referrerPolicy="no-referrer"
+                                className="h-[68vh] min-h-[520px] w-full bg-white"
+                              />
                             </div>
                           )}
                         </div>
@@ -492,8 +519,11 @@ export default function IsirView({
           </div>
           <div className="flex flex-wrap gap-2">
             <input ref={importInputRef} type="file" accept="application/json,.json" onChange={importLegacyBundle} className="sr-only" />
-            <button type="button" onClick={() => importInputRef.current?.click()} disabled={isImporting || isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-extrabold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60">
-              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />} Importovat lokální archiv
+            <button type="button" onClick={onImportLegacyFromDrive} disabled={isImporting || isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60">
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />} Načíst připravená data z Disku
+            </button>
+            <button type="button" onClick={() => importInputRef.current?.click()} disabled={isImporting || isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs font-extrabold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60">
+              <UploadCloud className="h-4 w-4" /> Vybrat jiný soubor
             </button>
             <button type="button" onClick={onCheckProject} disabled={isChecking || isImporting} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-700 px-5 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-sky-800 disabled:opacity-60">
               {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Hromadná kontrola ISIR

@@ -145,6 +145,11 @@ const PROJECT_BACKGROUND_IMAGES = Object.freeze({
   MAS: masBackgroundImage
 });
 
+const LEGACY_ISIR_MIGRATION_FILE_IDS = Object.freeze({
+  CECH: '1w_5NC7qQtVWeYDLQ2OVqrC0Z_KpS36rn',
+  MAS: '1on8fM59hEIbA6C8EVpY8376nDBtSCTfI'
+});
+
 const AI_TOOL_LINKS = Object.freeze([
   {
     title: 'Chráněné bydlení',
@@ -4887,6 +4892,31 @@ function App() {
     }
   };
 
+  const importLegacyIsirFromDrive = async () => {
+    const fileId = LEGACY_ISIR_MIGRATION_FILE_IDS[activeProjectId];
+    if (!fileId) throw new Error('Pro aktivní projekt není připraven importní soubor ISIR.');
+    setIsImportingLegacyIsir(true);
+    setProjectInsolvencyNotice(
+      `Načítám připravený archiv projektu ${activeProjectId} z Google Disku…`
+    );
+    try {
+      const response = await postGoogleSheetAction({
+        action: 'readLegacyIsirMigrationFile',
+        project_id: activeProjectId,
+        file_id: fileId
+      });
+      if (!response?.bundle) throw new Error('Google Disk nevrátil importní balíček ISIR.');
+      return await importLegacyIsirData(response.bundle);
+    } catch (error) {
+      const message = saveErrorMessage('Načtení archivu ISIR z Google Disku selhalo', error);
+      setProjectInsolvencyNotice(message);
+      setFlash(message);
+      throw error;
+    } finally {
+      setIsImportingLegacyIsir(false);
+    }
+  };
+
   const markIsirDocumentsSeen = async (caseId) => {
     const result = await postGoogleSheetAction({
       action: 'markIsirDocumentsSeen',
@@ -8395,6 +8425,7 @@ ${rawPlanOutput}` }] }],
               onMarkDocumentsSeen={markIsirDocumentsSeen}
               onExportCaseStudy={exportIsirCaseStudy}
               onImportLegacyData={importLegacyIsirData}
+              onImportLegacyFromDrive={importLegacyIsirFromDrive}
               onEditClient={openClientEditForm}
             />
           </React.Suspense>

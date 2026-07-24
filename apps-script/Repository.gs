@@ -93,6 +93,46 @@ function upsertDataObject_(sheetSpec, keyName, keyValue, value) {
   return appendDataObject_(sheetSpec, value);
 }
 
+function bulkUpsertDataObjects_(sheetSpec, keyName, values) {
+  const items = Array.isArray(values) ? values : [];
+  if (!items.length) return [];
+  const sheet = ensureDataSheet_(sheetSpec);
+  const existingRows = readDataObjects_(sheetSpec);
+  const existingByKey = existingRows.reduce((map, row) => {
+    map[String(row[keyName] || '')] = row;
+    return map;
+  }, {});
+  const updates = [];
+  const appends = [];
+
+  items.forEach((value) => {
+    const normalizedKey = String(value && value[keyName] || '');
+    if (!normalizedKey) return;
+    const existing = existingByKey[normalizedKey];
+    const row = sheetSpec.headers.map((header) => value[header] ?? '');
+    if (existing) {
+      updates.push({ rowNumber: Number(existing.__rowNumber), row: row });
+      existingByKey[normalizedKey] = Object.assign({}, value, {
+        __rowNumber: Number(existing.__rowNumber)
+      });
+      return;
+    }
+    appends.push(row);
+    existingByKey[normalizedKey] = Object.assign({}, value, {
+      __rowNumber: sheet.getLastRow() + appends.length
+    });
+  });
+
+  updates.forEach((update) => {
+    sheet.getRange(update.rowNumber, 1, 1, update.row.length).setValues([update.row]);
+  });
+  if (appends.length) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, appends.length, sheetSpec.headers.length)
+      .setValues(appends);
+  }
+  return items;
+}
+
 function replaceSheetValues_(sheetName, values) {
   if (!Array.isArray(values) || !values.length) throw new Error('Chybí data pro zápis.');
   const spreadsheet = getDataSpreadsheet_();

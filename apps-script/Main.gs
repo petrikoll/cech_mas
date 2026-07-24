@@ -149,6 +149,12 @@ function doPost(e) {
         documents: markIsirDocumentsSeen_(payload.case_id, context)
       });
     }
+    if (action === 'readLegacyIsirMigrationFile') {
+      return jsonResponse_({
+        ok: true,
+        bundle: readLegacyIsirMigrationFile_(payload.file_id, context)
+      });
+    }
     if (action === 'rebuildLegacyBridge') {
       context = assertProjectAccess_(payload.actor_id, projectId, ['GARANT', 'ADMIN']);
       return jsonResponse_({

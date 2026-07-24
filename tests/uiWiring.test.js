@@ -219,8 +219,11 @@ test('ISIR imports a saved local archive without another Gemini call', () => {
     new URL('../src/app/IsirView.jsx', import.meta.url),
     'utf8'
   );
-  assert.match(isirViewSource, /Importovat lokální archiv/);
+  assert.match(isirViewSource, /Načíst připravená data z Disku/);
+  assert.match(isirViewSource, /Náhled PDF/);
+  assert.match(isirViewSource, /<iframe/);
   assert.match(appSource, /importLegacyIsirData/);
+  assert.match(appSource, /readLegacyIsirMigrationFile/);
   assert.match(appSource, /Gemini nebyl spuštěn/);
   assert.match(appSource, /Datum narození nesouhlasí/);
 });
