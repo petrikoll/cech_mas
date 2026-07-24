@@ -3757,15 +3757,40 @@ function App() {
       actor_id: payload.actor_id || currentWorker,
       source_system: payload.source_system || 'NEW_APP'
     };
-    const response = await fetch(GOOGLE_SHEET_MACRO_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify(scopedPayload)
-    });
-    if (!response.ok) throw new Error('Google Sheet akce selhala: ' + response.status);
-    const result = await response.json().catch(() => ({}));
-    if (result.ok === false) throw new Error(result.error || 'Google Sheet akce selhala.');
-    return result;
+    const isRetrySafeAction = [
+      'verifyClientInsolvency',
+      'verifyProjectInsolvencies'
+    ].includes(scopedPayload.action);
+    const maxAttempts = isRetrySafeAction ? 3 : 1;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        const response = await fetch(GOOGLE_SHEET_MACRO_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+          body: JSON.stringify(scopedPayload)
+        });
+        const isTransientGatewayError = [502, 503, 504].includes(response.status);
+        if (!response.ok) {
+          if (isTransientGatewayError && attempt < maxAttempts) {
+            await new Promise((resolve) => window.setTimeout(resolve, attempt * 900));
+            continue;
+          }
+          throw new Error('Google Sheet akce selhala: ' + response.status);
+        }
+        const result = await response.json().catch(() => ({}));
+        if (result.ok === false) throw new Error(result.error || 'Google Sheet akce selhala.');
+        return result;
+      } catch (error) {
+        const isNetworkFailure = error instanceof TypeError;
+        if (isRetrySafeAction && isNetworkFailure && attempt < maxAttempts) {
+          await new Promise((resolve) => window.setTimeout(resolve, attempt * 900));
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw new Error('Google Sheet akce selhala po opakovaných pokusech.');
   };
 
   const loadBackupStatus = async () => {

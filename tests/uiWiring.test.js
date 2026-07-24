@@ -54,6 +54,12 @@ test('klientský registr používá rychlou relační mezipaměť', () => {
   assert.match(appSource, /setIsLoadingClients\(cachedClients\.length === 0\)/);
 });
 
+test('kontrola ISIR bezpečně opakuje dočasné chyby brány', () => {
+  assert.match(appSource, /verifyProjectInsolvencies/);
+  assert.match(appSource, /\[502, 503, 504\]\.includes\(response\.status\)/);
+  assert.match(appSource, /const maxAttempts = isRetrySafeAction \? 3 : 1/);
+});
+
 test('KA1 performance form is bundled with the main React runtime', () => {
   assert.match(appSource, /import Ka02View from '\.\/Ka02View\.jsx';/);
   assert.doesNotMatch(appSource, /const Ka02View = React\.lazy/);
