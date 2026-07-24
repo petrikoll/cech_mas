@@ -233,9 +233,16 @@ function buildRegistryRowFromClient_(client, clientNumber, existingRow) {
   return row;
 }
 
+function buildGlobalClientIdentityKey_(firstName, lastName, birthDate) {
+  return [
+    normalizeMatchText_(firstName),
+    normalizeMatchText_(lastName),
+    birthDate ? safeNormalizeDate_(birthDate) : ''
+  ].join('|');
+}
+
 function assertNoDuplicateClient_(rows, client, ignoredClientNumber) {
-  const targetKey = buildLegacyMatchKey_(
-    client.project_id,
+  const targetKey = buildGlobalClientIdentityKey_(
     client.jmeno,
     client.prijmeni,
     client.datum_narozeni
@@ -250,14 +257,19 @@ function assertNoDuplicateClient_(rows, client, ignoredClientNumber) {
     if (Number(ignoredClientNumber) === number) return false;
     const rowProject = normalizeProjectId_(row[REGISTRY_COLUMN.projectId]);
     if (!rowProject) return false;
-    return buildLegacyMatchKey_(
-      rowProject,
+    return buildGlobalClientIdentityKey_(
       row[REGISTRY_COLUMN.firstName],
       row[REGISTRY_COLUMN.lastName],
       row[REGISTRY_COLUMN.birthDate]
     ) === targetKey;
   });
-  if (duplicate) throw new Error('Klient se stejnou identitou už v registru existuje.');
+  if (duplicate) {
+    const duplicateProject = normalizeProjectId_(duplicate[REGISTRY_COLUMN.projectId]);
+    throw new Error(
+      'Klient se stejným jménem a datem narození už existuje' +
+      (duplicateProject ? ' v projektu ' + duplicateProject : '') + '.'
+    );
+  }
 }
 
 function saveClient_(clientInput, context) {

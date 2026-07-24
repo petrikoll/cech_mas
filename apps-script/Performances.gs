@@ -75,6 +75,42 @@ function buildIdempotencyKey_(performance) {
   return digest.map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2)).join('');
 }
 
+function buildClientIdentityMap_() {
+  const registryRows = getRegistryRows_();
+  return readDataObjects_(DATA_SHEETS.clientIndex).reduce((map, index) => {
+    const row = registryRows[Number(index.registry_row) - 2];
+    if (!row || !isOccupiedRegistryRow_(row)) return map;
+    map[String(index.client_id || '')] = buildGlobalClientIdentityKey_(
+      row[REGISTRY_COLUMN.firstName],
+      row[REGISTRY_COLUMN.lastName],
+      row[REGISTRY_COLUMN.birthDate]
+    );
+    return map;
+  }, {});
+}
+
+function buildGlobalPerformanceDuplicateKey_(performance, clientIdentity) {
+  let activityCodes = performance.activity_codes_json || performance.activity_codes || [];
+  try {
+    activityCodes = normalizeActivityCodes_(activityCodes).join(',');
+  } catch (error) {
+    activityCodes = normalizeText_(activityCodes);
+  }
+  const seed = [
+    clientIdentity,
+    normalizeText_(performance.date),
+    normalizeText_(performance.start_time),
+    normalizeText_(performance.end_time),
+    Number(performance.duration_minutes || 0),
+    activityCodes,
+    normalizeMatchText_(performance.meeting_form),
+    normalizeMatchText_(performance.place),
+    normalizeMatchText_(performance.case_note)
+  ].join('|');
+  const digest = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, seed);
+  return digest.map((byte) => ('0' + (byte & 0xff).toString(16)).slice(-2)).join('');
+}
+
 function requireClientForProject_(clientId, projectId) {
   const index = getClientIndexById_(clientId);
   if (!index) {
@@ -147,9 +183,20 @@ function savePerformance_(performanceInput, context) {
   try {
     const normalized = normalizePerformanceInput_(performanceInput || {}, context);
     const rows = readDataObjects_(DATA_SHEETS.performances);
+    const identityByClientId = buildClientIdentityMap_();
+    const normalizedDuplicateKey = buildGlobalPerformanceDuplicateKey_(
+      normalized,
+      identityByClientId[normalized.client_id] || normalized.client_id
+    );
     const duplicate = rows.find((row) =>
-      String(row.idempotency_key || '') === normalized.idempotency_key &&
-      String(row.status || '').toUpperCase() === 'ACTIVE'
+      String(row.status || '').toUpperCase() === 'ACTIVE' &&
+      (
+        String(row.idempotency_key || '') === normalized.idempotency_key ||
+        buildGlobalPerformanceDuplicateKey_(
+          row,
+          identityByClientId[String(row.client_id || '')] || String(row.client_id || '')
+        ) === normalizedDuplicateKey
+      )
     );
     if (duplicate) {
       const result = Object.assign({}, duplicate);

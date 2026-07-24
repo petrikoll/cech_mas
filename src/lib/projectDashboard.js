@@ -10,8 +10,7 @@ const PROJECT_DASHBOARD_CONFIG = Object.freeze({
       Object.freeze({ key: 'approved-insolvencies', label: 'Insolvence – schváleno', target: 25, baseline: 0 }),
       Object.freeze({ key: 'stabilized-debt', label: 'Stabilizace dluhové situace', target: 50, baseline: 0 }),
       Object.freeze({ key: 'repaying-agreements', label: 'Splácení uzavřených dohod', target: 15, baseline: 0 }),
-      Object.freeze({ key: 'financial-literacy', label: 'Zvýšení gramotnosti', target: 80, baseline: 0 }),
-      Object.freeze({ key: 'employee-ipv', label: 'Naplnění IPV zaměstnanců', target: 5, baseline: 5 })
+      Object.freeze({ key: 'financial-literacy', label: 'Zvýšení gramotnosti', target: 80, baseline: 0 })
     ])
   }),
   CECH: Object.freeze({
@@ -25,8 +24,7 @@ const PROJECT_DASHBOARD_CONFIG = Object.freeze({
       Object.freeze({ key: 'approved-insolvencies', label: 'Insolvence – schváleno', target: 25, baseline: 0 }),
       Object.freeze({ key: 'stabilized-debt', label: 'Stabilizace dluhové situace', target: 50, baseline: 4 }),
       Object.freeze({ key: 'repaying-agreements', label: 'Splácení uzavřených dohod', target: 15, baseline: 0 }),
-      Object.freeze({ key: 'financial-literacy', label: 'Zvýšení gramotnosti', target: 80, baseline: 0 }),
-      Object.freeze({ key: 'employee-ipv', label: 'Naplnění IPV zaměstnanců', target: 6, baseline: 6 })
+      Object.freeze({ key: 'financial-literacy', label: 'Zvýšení gramotnosti', target: 80, baseline: 0 })
     ])
   })
 });
@@ -177,8 +175,7 @@ function buildProjectDashboard({ projectId, clients = [], records = [] }) {
     'approved-insolvencies': approvedInsolvencyIds.size,
     'stabilized-debt': stabilizedDebtIds.size,
     'repaying-agreements': clientsRepayingAgreements.size,
-    'financial-literacy': financialLiteracyIds.size,
-    'employee-ipv': config.goals.find((item) => item.key === 'employee-ipv')?.baseline || 0
+    'financial-literacy': financialLiteracyIds.size
   };
 
   const indicators = config.indicators.map((item) => {

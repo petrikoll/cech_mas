@@ -44,6 +44,8 @@ this.__backendTest = {
   normalizeActivityCodes_,
   calculateDurationMinutes_,
   buildLegacyMatchKey_,
+  buildGlobalClientIdentityKey_,
+  buildGlobalPerformanceDuplicateKey_,
   findNextClientNumberFromRows_,
   aggregateNewPerformances_,
   durationToMinutes_,
@@ -118,6 +120,34 @@ test('legacy mapovací klíč je projektový a odolný vůči mezerám a diakrit
   const otherProject = backend.buildLegacyMatchKey_('MAS', 'Jiri', 'Smid', '1988-01-20');
   assert.equal(first, second);
   assert.notEqual(first, otherProject);
+});
+
+test('ochrana klientů porovnává identitu i mezi projekty', () => {
+  const cech = backend.buildGlobalClientIdentityKey_(' Jiří ', 'Šmíd', '20.1.1988');
+  const mas = backend.buildGlobalClientIdentityKey_('Jiri', 'Smid ', '1988-01-20');
+  assert.equal(cech, mas);
+});
+
+test('ochrana výkonů rozpozná totožný zápis i v jiném projektu', () => {
+  const shared = {
+    date: '2026-03-20',
+    start_time: '09:00',
+    end_time: '10:00',
+    duration_minutes: 60,
+    activity_codes_json: '["C1","C3"]',
+    meeting_form: 'Ambulantní',
+    place: 'Hlinka',
+    case_note: 'Klient doložil podklady.'
+  };
+  const first = backend.buildGlobalPerformanceDuplicateKey_(
+    { ...shared, project_id: 'CECH', client_id: 'cech-1', worker_id: 'Sulková' },
+    'jiri|smid|1988-01-20'
+  );
+  const second = backend.buildGlobalPerformanceDuplicateKey_(
+    { ...shared, project_id: 'MAS', client_id: 'mas-9', worker_id: 'Nováková' },
+    'jiri|smid|1988-01-20'
+  );
+  assert.equal(first, second);
 });
 
 test('bridge agreguje jen aktivní výkony z nové aplikace', () => {

@@ -12,7 +12,7 @@ test('výchozí plnění MAS odpovídá schválené projektové sestavě', () =>
   ]);
   assert.equal(dashboard.outputPercent, 50);
   assert.equal(Math.round(dashboard.resultPercent * 100) / 100, 0.68);
-  assert.equal(dashboard.goalsPercent, 20);
+  assert.equal(dashboard.goalsPercent, 0);
 });
 
 test('výchozí plnění CECH odpovídá schválené projektové sestavě', () => {
@@ -22,12 +22,11 @@ test('výchozí plnění CECH odpovídá schválené projektové sestavě', () =
     { label: 'Insolvence – schváleno', target: 25, current: 0 },
     { label: 'Stabilizace dluhové situace', target: 50, current: 4 },
     { label: 'Splácení uzavřených dohod', target: 15, current: 0 },
-    { label: 'Zvýšení gramotnosti', target: 80, current: 0 },
-    { label: 'Naplnění IPV zaměstnanců', target: 6, current: 6 }
+    { label: 'Zvýšení gramotnosti', target: 80, current: 0 }
   ]);
   assert.equal(dashboard.outputPercent, 50);
   assert.equal(Math.round(dashboard.resultPercent * 100) / 100, 4.73);
-  assert.equal(dashboard.goalsPercent, 21.6);
+  assert.equal(dashboard.goalsPercent, 2);
 });
 
 test('dashboard nepočítá individuální plány jako projektové cíle', () => {
@@ -42,7 +41,7 @@ test('dashboard nepočítá individuální plány jako projektové cíle', () =>
     }]
   });
   assert.equal(dashboard.indicators.find((item) => item.key === '600000').current, 0);
-  assert.equal(dashboard.goals.find((item) => item.key === 'employee-ipv').current, 5);
+  assert.equal(dashboard.goals.some((item) => item.key === 'employee-ipv'), false);
 });
 
 test('C3 sleduje podání, ale schválení vznikne jen z ověření ISIR po 1. 3. 2026', () => {

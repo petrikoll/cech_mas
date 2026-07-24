@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Archive, ClipboardCopy, Download, FileSpreadsheet, FileText, HardDriveDownload, Loader2, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Activity, Archive, BarChart3, CheckCircle2, ClipboardCopy, Download, FileSpreadsheet, FileText, Flag, HardDriveDownload, Loader2, ShieldCheck, Target } from 'lucide-react';
 
 import { HelpIcon, Panel, SelectField } from '../components/ui.jsx';
 import { HELP } from '../config/helpCatalog.js';
@@ -11,64 +11,98 @@ const formatMetric = (value) =>
 const formatPercent = (value) =>
   `${Number(value || 0).toLocaleString('cs-CZ', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} %`;
 
-function FulfillmentTable({ title, rows, summaryRows = [], accent = 'indigo' }) {
-  const tone = accent === 'emerald'
-    ? { border: 'border-emerald-200', header: 'bg-emerald-700', bar: 'bg-emerald-600', soft: 'bg-emerald-50' }
-    : { border: 'border-indigo-200', header: 'bg-indigo-700', bar: 'bg-indigo-600', soft: 'bg-indigo-50' };
+const PROJECT_TONES = {
+  CECH: {
+    badge: 'border-indigo-200 bg-indigo-50 text-indigo-700',
+    icon: 'bg-indigo-100 text-indigo-700',
+    bar: 'bg-indigo-600',
+    ring: '#4f46e5',
+    soft: 'border-indigo-100 bg-indigo-50/50'
+  },
+  MAS: {
+    badge: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    icon: 'bg-emerald-100 text-emerald-700',
+    bar: 'bg-emerald-600',
+    ring: '#059669',
+    soft: 'border-emerald-100 bg-emerald-50/50'
+  }
+};
 
+const safePercent = (value) => Math.max(0, Math.min(100, Number(value) || 0));
+
+function SummaryCard({ label, accessibleLabel, value, icon: Icon, tone }) {
+  const percent = safePercent(value);
   return (
-    <section className={`overflow-hidden rounded-2xl border ${tone.border} bg-white shadow-sm`}>
-      <div className={`${tone.header} px-5 py-4 text-white`}>
-        <div className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5" />
-          <h2 className="text-base font-black">{title}</h2>
+    <div aria-label={accessibleLabel || label} className="flex min-w-0 items-center gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div
+        className="grid h-16 w-16 shrink-0 place-items-center rounded-full"
+        style={{ background: `conic-gradient(${tone.ring} ${percent * 3.6}deg, #e2e8f0 0deg)` }}
+      >
+        <div className="grid h-12 w-12 place-items-center rounded-full bg-white">
+          <Icon className="h-5 w-5 text-slate-600" />
         </div>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[620px] text-sm">
-          <thead className={`${tone.soft} text-left text-[11px] font-extrabold uppercase tracking-wide text-slate-600`}>
-            <tr>
-              <th className="px-4 py-3">{rows[0]?.code ? 'Indikátor' : 'Ukazatel'}</th>
-              <th className="px-4 py-3 text-right">Cílová hodnota</th>
-              <th className="px-4 py-3 text-right">Aktuální plnění</th>
-              <th className="px-4 py-3 text-right">Plnění v %</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-100">
-            {rows.map((item) => (
-              <tr key={item.key} className="hover:bg-slate-50/80">
-                <td className="px-4 py-3 font-bold text-slate-900">{item.code || item.label}</td>
-                <td className="px-4 py-3 text-right text-slate-700">{formatMetric(item.target)}</td>
-                <td className="px-4 py-3 text-right font-black text-slate-950">{formatMetric(item.current)}</td>
-                <td className="w-44 px-4 py-3">
-                  <div className="flex items-center justify-end gap-3">
-                    <div className="h-2 w-20 overflow-hidden rounded-full bg-slate-100">
-                      <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${Math.min(100, item.percent)}%` }} />
-                    </div>
-                    <strong className="w-16 text-right text-slate-900">{formatPercent(item.percent)}</strong>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-          {summaryRows.length > 0 && (
-            <tfoot className={`${tone.soft} border-t-2 ${tone.border}`}>
-              {summaryRows.map((item) => (
-                <tr key={item.label}>
-                  <td colSpan={3} className="px-4 py-3 font-extrabold text-slate-800">{item.label}</td>
-                  <td className="px-4 py-3 text-right font-black text-slate-950">{formatPercent(item.value)}</td>
-                </tr>
-              ))}
-            </tfoot>
-          )}
-        </table>
+      <div className="min-w-0">
+        <div className="text-2xl font-black tracking-tight text-slate-950">{formatPercent(value)}</div>
+        <div className="mt-0.5 text-sm font-semibold leading-snug text-slate-600">{label}</div>
       </div>
-    </section>
+    </div>
+  );
+}
+
+function MetricCard({ item, tone }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.12em] text-slate-500">Indikátor</div>
+          <h3 className="mt-1 text-lg font-black text-slate-950">{item.code}</h3>
+        </div>
+        <div className={`rounded-xl p-2.5 ${tone.icon}`}><BarChart3 className="h-5 w-5" /></div>
+      </div>
+      <div className="mt-5 flex items-end justify-between gap-3">
+        <div>
+          <div className="text-xs font-semibold text-slate-500">Aktuálně / cíl</div>
+          <div className="mt-1 text-xl font-black text-slate-950">
+            {formatMetric(item.current)} <span className="text-sm font-semibold text-slate-400">/ {formatMetric(item.target)}</span>
+          </div>
+        </div>
+        <strong className="text-sm text-slate-700">{formatPercent(item.percent)}</strong>
+      </div>
+      <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100">
+        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${safePercent(item.percent)}%` }} />
+      </div>
+    </article>
+  );
+}
+
+function GoalCard({ item, tone }) {
+  return (
+    <article className={`rounded-xl border p-4 ${tone.soft}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <h3 className="font-bold leading-snug text-slate-900">{item.label}</h3>
+            {item.supplemental && (
+              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-500">
+                mezivýsledek
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-sm text-slate-600">
+            <strong className="text-slate-950">{formatMetric(item.current)}</strong> z cílových {formatMetric(item.target)}
+          </div>
+        </div>
+        <div className="shrink-0 text-right text-sm font-black text-slate-800">{formatPercent(item.percent)}</div>
+      </div>
+      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white">
+        <div className={`h-full rounded-full ${tone.bar}`} style={{ width: `${safePercent(item.percent)}%` }} />
+      </div>
+    </article>
   );
 }
 
 function ReportingView({
-  dashboardOverview,
   projectDashboard,
   activeProjectId,
   exportClientsCsv,
@@ -89,34 +123,55 @@ function ReportingView({
   handleStartFullBackup,
   handleInstallWeeklyBackup
 }) {
-  const overview = dashboardOverview || { indicators: [], longGoals: [], shortGoals: [], activityGoals: [], professionalDevelopmentStats: [], partnerMetrics: [], risks: [] };
   const fulfillment = projectDashboard || { indicators: [], goals: [], outputPercent: 0, resultPercent: 0, goalsPercent: 0 };
-  const projectAccent = activeProjectId === 'MAS' ? 'emerald' : 'indigo';
+  const tone = PROJECT_TONES[activeProjectId] || PROJECT_TONES.CECH;
   const backupBusy = isBackupActionRunning || ['queued', 'running'].includes(backupStatus?.state);
   const backupFinishedAt = backupStatus?.finishedAt
     ? new Date(backupStatus.finishedAt).toLocaleString('cs-CZ')
     : '';
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 xl:grid-cols-2">
-        <FulfillmentTable
-          title={`PROJEKT ${activeProjectId || ''} – Plnění indikátorů`}
-          rows={fulfillment.indicators}
-          summaryRows={[
-            { label: 'Plnění indikátorů výstupů celkem v %', value: fulfillment.outputPercent },
-            { label: 'Plnění indikátorů výsledků celkem v %', value: fulfillment.resultPercent }
-          ]}
-          accent={projectAccent}
-        />
-        <FulfillmentTable
-          title={`PROJEKT ${activeProjectId || ''} – Plnění cílů`}
-          rows={fulfillment.goals}
-          summaryRows={[
-            { label: 'Plnění cílů celkem v %', value: fulfillment.goalsPercent }
-          ]}
-          accent={projectAccent}
-        />
-      </div>
+      <section className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4 shadow-sm sm:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={`rounded-full border px-3 py-1 text-xs font-black tracking-wide ${tone.badge}`}>
+                PROJEKT {activeProjectId || ''}
+              </span>
+              <span className="text-xs font-semibold text-slate-500">Kumulativní stav projektu</span>
+            </div>
+            <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Plnění indikátorů a cílů</h1>
+            <p className="mt-1 text-sm text-slate-600">Rychlý přehled aktuálního plnění vůči cílovým hodnotám.</p>
+          </div>
+          <div className={`hidden rounded-2xl p-3 sm:block ${tone.icon}`}><Target className="h-7 w-7" /></div>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-3">
+          <SummaryCard label="Výstupové indikátory" accessibleLabel="Plnění indikátorů výstupů celkem v %" value={fulfillment.outputPercent} icon={Flag} tone={tone} />
+          <SummaryCard label="Výsledkové indikátory" accessibleLabel="Plnění indikátorů výsledků celkem v %" value={fulfillment.resultPercent} icon={BarChart3} tone={tone} />
+          <SummaryCard label="Projektové cíle" accessibleLabel="Plnění cílů celkem v %" value={fulfillment.goalsPercent} icon={CheckCircle2} tone={tone} />
+        </div>
+      </section>
+
+      <section>
+        <div className="mb-3 flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-slate-500" />
+          <h2 className="text-lg font-black text-slate-950">Plnění indikátorů</h2>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          {fulfillment.indicators.map((item) => <MetricCard key={item.key} item={item} tone={tone} />)}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
+        <div className="mb-4 flex items-center gap-2">
+          <Target className="h-5 w-5 text-slate-500" />
+          <h2 className="text-lg font-black text-slate-950">Plnění cílů</h2>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-2">
+          {fulfillment.goals.map((item) => <GoalCard key={item.key} item={item} tone={tone} />)}
+        </div>
+      </section>
 
       <Panel
         title="Nástroje reportingu"
