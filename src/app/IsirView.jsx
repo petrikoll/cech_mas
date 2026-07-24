@@ -26,6 +26,7 @@ import {
   UploadCloud,
   X
 } from 'lucide-react';
+import { parseLegacyIsirCaseStudy } from '../lib/legacyIsirCaseStudy.js';
 
 const formatDate = (value, withTime = false) => {
   const text = String(value || '');
@@ -214,9 +215,13 @@ export default function IsirView({
   const selectedAnalysis = selectedCase ? latestAnalysisByCase[selectedCase.case_id] || null : null;
   const parsedAnalysisResult = selectedAnalysis?.result
     || safeParse(selectedAnalysis?.result_json || selectedCase?.ai_summary_json, {});
+  const legacyCaseStudy = parsedAnalysisResult.case_study || selectedCase?.ai_case_study || '';
+  const legacyCaseStudyResult = parseLegacyIsirCaseStudy(legacyCaseStudy);
   const analysisResult = {
     ...parsedAnalysisResult,
-    case_study: parsedAnalysisResult.case_study || selectedCase?.ai_case_study || ''
+    ...legacyCaseStudyResult,
+    finances: parsedAnalysisResult.finances || {},
+    case_study: legacyCaseStudy
   };
 
   const checkedCount = clientRows.filter((row) => row.verification).length;
@@ -270,36 +275,37 @@ export default function IsirView({
     const previewDocument = selectedCaseDocuments.find((item) => item.document_id === previewDocumentId) || null;
     const previewDocumentUrl = getPdfPreviewUrl(previewDocument);
     return (
-      <section className="space-y-4">
-        <article className="rounded-3xl border border-white bg-[#f3e8d7]/[0.96] p-5 shadow-[0_22px_60px_-46px_rgba(15,23,42,0.45)] ring-1 ring-amber-950/[0.08]">
-          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <section className="space-y-3">
+        <article className="rounded-2xl border border-amber-900/15 bg-white/[0.96] p-3 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45)]">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <button type="button" onClick={() => setView('list')} className="rounded-xl border border-amber-900/10 bg-white/80 p-2.5 text-slate-600 hover:bg-white" aria-label="Zpět na přehled">
-                <ArrowLeft className="h-5 w-5" />
+              <button type="button" onClick={() => setView('list')} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" aria-label="Zpět na přehled">
+                <ArrowLeft className="h-4 w-4" />
               </button>
               <div>
-                <h2 className="text-2xl font-black text-slate-950">{selectedRow.client.fullName}</h2>
-                <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-900/60">Klient ISIR · ID {selectedRow.client.clientNumber}</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-700">Detail klienta ISIR · ID {selectedRow.client.clientNumber}</p>
+                <h2 className="mt-0.5 text-xl font-black text-slate-950">{selectedRow.client.fullName}</h2>
+                <p className="text-xs text-slate-500">Datum narození {formatDate(selectedRow.client.datumNarozeni)} · projekt {selectedRow.client.projectId}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => onEditClient(selectedRow.client)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => onEditClient(selectedRow.client)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                 <Pencil className="h-4 w-4" /> Upravit klienta
               </button>
-              <button type="button" onClick={() => onCheckClient(selectedRow.client)} disabled={isChecking} className="inline-flex items-center gap-2 rounded-xl bg-sky-700 px-4 py-2.5 text-sm font-extrabold text-white hover:bg-sky-800 disabled:opacity-60">
+              <button type="button" onClick={() => onCheckClient(selectedRow.client)} disabled={isChecking} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-700 px-3 py-2 text-xs font-extrabold text-white hover:bg-rose-800 disabled:opacity-60">
                 {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Zkontrolovat nyní
               </button>
             </div>
           </div>
-          <div className="mt-5 grid gap-x-8 gap-y-4 border-t border-amber-950/10 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+        </article>
+
+        <article className="rounded-xl border border-[#9a6b3e] bg-[#bd8753] p-3 text-slate-950 shadow-[0_12px_30px_-26px_rgba(71,42,18,0.8)]">
+          <div className="grid gap-x-5 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              ['Klient', selectedRow.client.fullName],
-              ['Datum narození', formatDate(selectedRow.client.datumNarozeni)],
-              ['Projekt', selectedRow.client.projectId],
-              ['Poslední kontrola', formatDate(selectedRow.lastChecked, true)],
               ['Stav řízení', selectedCase ? normalizedStatus(selectedCase.case_status) : 'BEZ ŘÍZENÍ'],
               ['Spisová značka', selectedCase?.case_number || '—'],
               ['Datum zahájení', formatDate(selectedCase?.proceeding_started_at)],
+              ['Poslední kontrola', formatDate(selectedRow.lastChecked, true)],
               ['Poslední událost', selectedCase?.last_event_title || '—'],
               ['Hlavní dokumenty', selectedCase ? (selectedCase.main_document_count || selectedCaseDocuments.filter((item) => isTruthy(item.is_main)).length) : '—'],
               ['Vedlejší dokumenty', selectedCase ? (selectedCase.secondary_document_count || selectedCaseDocuments.filter((item) => !isTruthy(item.is_main)).length) : '—'],
@@ -307,13 +313,13 @@ export default function IsirView({
               ['Přihlášky pohledávek', finance.reviewed_claims_count ?? selectedCase?.claims_count ?? '—']
             ].map(([label, value]) => (
               <div key={label} className={label === 'Poslední událost' ? 'lg:col-span-2' : ''}>
-                <p className="text-[10px] font-extrabold uppercase tracking-wide text-amber-950/55">{label}</p>
-                <p className={`mt-1 text-sm font-extrabold leading-5 ${label === 'Stav řízení' && isDebtRelief(value) ? 'text-emerald-800' : 'text-slate-900'}`}>{value}</p>
+                <p className="text-[9px] font-extrabold uppercase tracking-wide text-amber-950/65">{label}</p>
+                <p className={`mt-0.5 text-xs font-extrabold leading-4 ${label === 'Stav řízení' && isDebtRelief(value) ? 'text-emerald-950' : 'text-slate-950'}`}>{value}</p>
               </div>
             ))}
           </div>
           {selectedRow.clientCases.length > 1 && (
-            <div className="mt-5 flex flex-wrap gap-2 border-t border-amber-950/10 pt-4">
+            <div className="mt-3 flex flex-wrap gap-2 border-t border-amber-950/20 pt-3">
               {selectedRow.clientCases.map((item) => (
                 <button key={item.case_id} type="button" onClick={() => {
                   setSelectedCaseId(item.case_id);
@@ -328,6 +334,16 @@ export default function IsirView({
             </div>
           )}
         </article>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white/[0.94] px-3 py-2 text-[11px] shadow-sm">
+          <span className="inline-flex items-center gap-2 font-bold text-emerald-800">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            {isAnalyzing ? 'AI právě zpracovává dokumenty' : 'Bez běžící AI úlohy'}
+          </span>
+          <span className="text-slate-500">
+            <strong className="text-slate-700">Kazuistika:</strong> {selectedAnalysis ? formatDate(selectedAnalysis.created_at, true) : 'zatím nevytvořena'}
+          </span>
+        </div>
 
         {!selectedCase ? (
           <div className="rounded-3xl border border-white bg-white/90 p-12 text-center ring-1 ring-slate-900/[0.05]">
@@ -366,7 +382,7 @@ export default function IsirView({
                       return (
                         <div
                           key={document.document_id}
-                          className={`flex w-[182px] flex-none flex-col transition ${
+                          className={`flex w-[158px] flex-none flex-col transition ${
                             previewDocumentId === document.document_id
                               ? 'bg-sky-50 ring-2 ring-inset ring-sky-300'
                               : selected
@@ -374,7 +390,7 @@ export default function IsirView({
                                 : 'bg-white hover:bg-slate-50'
                           }`}
                         >
-                          <div className="flex min-h-[112px] items-start gap-2 p-2.5">
+                          <div className="flex min-h-[96px] items-start gap-2 p-2">
                               <input
                                 type="checkbox"
                                 checked={selected}
@@ -474,38 +490,66 @@ export default function IsirView({
                       </button>
                     )}
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-2 rounded-xl bg-slate-100 p-1">
-                    <button type="button" onClick={() => setAnalysisTab('current')} className={`rounded-lg px-3 py-2 text-xs font-extrabold ${analysisTab === 'current' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>Aktuální stav</button>
-                    <button type="button" onClick={() => setAnalysisTab('evolution')} className={`rounded-lg px-3 py-2 text-xs font-extrabold ${analysisTab === 'evolution' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>Vývoj řízení</button>
-                  </div>
                   {!selectedAnalysis && !selectedCase.ai_summary_json ? (
                     <div className="mt-4 rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-6 text-center">
                       <Bot className="mx-auto h-7 w-7 text-violet-400" />
                       <p className="mt-2 text-sm font-bold text-slate-800">Vyberte důležité dokumenty a vytvořte společnou analýzu.</p>
                     </div>
-                  ) : analysisTab === 'current' ? (
-                    <div className="mt-5 space-y-5">
-                      <div><h4 className="text-sm font-black text-slate-900">Stav nyní</h4><p className="mt-2 text-sm leading-6 text-slate-700">{analysisResult.status_now || 'Neuvedeno'}</p></div>
-                      <div><h4 className="text-sm font-black text-slate-900">Nejbližší termíny</h4><div className="mt-2"><AnalysisList items={analysisResult.nearest_deadlines} /></div></div>
-                      <div><h4 className="text-sm font-black text-slate-900">Co ověřit a řešit</h4><div className="mt-2"><AnalysisList items={analysisResult.advisor_actions} /></div></div>
-                      <div><h4 className="text-sm font-black text-slate-900">Co má udělat klient</h4><div className="mt-2"><AnalysisList items={analysisResult.client_actions} /></div></div>
-                      <div className="rounded-2xl bg-emerald-50/70 p-4 ring-1 ring-emerald-100">
-                        <h4 className="text-sm font-black text-emerald-950">Finance a pohledávky</h4>
-                        <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                          <div><dt className="text-xs text-emerald-800">Pohledávky celkem</dt><dd className="font-black text-emerald-950">{formatMoney(finance.claims_total_amount || selectedCase.claims_total_amount)}</dd></div>
-                          <div><dt className="text-xs text-emerald-800">Přezkoumáno</dt><dd className="font-black text-emerald-950">{finance.reviewed_claims_count ?? selectedCase.claims_count ?? '—'}</dd></div>
-                          <div><dt className="text-xs text-emerald-800">Očekávání 3 roky</dt><dd className="font-black text-emerald-950">{finance.expected_satisfaction_3y_percent == null ? '—' : `${finance.expected_satisfaction_3y_percent} %`}</dd></div>
-                          <div><dt className="text-xs text-emerald-800">Očekávání 5 let</dt><dd className="font-black text-emerald-950">{finance.expected_satisfaction_5y_percent == null ? '—' : `${finance.expected_satisfaction_5y_percent} %`}</dd></div>
-                        </dl>
-                      </div>
-                      <div><h4 className="text-sm font-black text-slate-900">Nejistoty</h4><div className="mt-2"><AnalysisList items={analysisResult.uncertainties} empty="Žádné uvedené." /></div></div>
-                      <p className="border-t border-slate-100 pt-3 text-xs text-slate-500">Jistota výstupu: <strong>{analysisResult.confidence || 'neuvedena'}</strong></p>
-                    </div>
                   ) : (
-                    <div className="mt-5 space-y-5">
-                      <div><h4 className="text-sm font-black text-slate-900">Chronologie</h4><div className="mt-2"><AnalysisList items={analysisResult.proceeding_evolution} /></div></div>
-                      {analysisResult.insolvency_evaluation && <div><h4 className="text-sm font-black text-slate-900">Vyhodnocení oddlužení</h4><p className="mt-2 text-sm leading-6 text-slate-700">{analysisResult.insolvency_evaluation}</p></div>}
-                      {analysisResult.case_study && <div><h4 className="text-sm font-black text-slate-900">Kazuistika</h4><p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{analysisResult.case_study}</p></div>}
+                    <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
+                      <aside className="rounded-xl border border-amber-200 bg-[#f7ead8] p-2">
+                        <nav className="space-y-2" aria-label="Části kazuistiky">
+                          <button type="button" onClick={() => setAnalysisTab('current')} className={`w-full rounded-lg border px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide transition ${
+                            analysisTab === 'current'
+                              ? 'border-amber-800 bg-[#875326] text-white shadow-sm'
+                              : 'border-amber-300 bg-white text-amber-950 hover:bg-amber-50'
+                          }`}>Aktuální stav a co řešit</button>
+                          <button type="button" onClick={() => setAnalysisTab('evolution')} className={`w-full rounded-lg border px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide transition ${
+                            analysisTab === 'evolution'
+                              ? 'border-amber-800 bg-[#875326] text-white shadow-sm'
+                              : 'border-amber-300 bg-white text-amber-950 hover:bg-amber-50'
+                          }`}>Vývoj řízení</button>
+                        </nav>
+                        <div className="mt-3 border-t border-amber-200 pt-3">
+                          <p className="text-[9px] font-extrabold uppercase tracking-wide text-amber-900/60">Minimalizovaná shrnutí</p>
+                          <p className="mt-1 text-[10px] leading-4 text-amber-950/65">Uložená shrnutí dokumentů se zobrazí zde po jejich vytvoření.</p>
+                        </div>
+                      </aside>
+
+                      <section className="rounded-xl border border-sky-200 bg-white p-4">
+                        <h3 className="text-base font-black text-slate-950">
+                          {analysisTab === 'current' ? 'Aktuální stav a co řešit' : 'Vývoj řízení'}
+                        </h3>
+                        {analysisTab === 'current' ? (
+                          <div className="mt-4 space-y-4">
+                            <div><h4 className="text-xs font-black text-slate-900">Stav nyní</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.status_now || 'Neuvedeno'}</p></div>
+                            <div><h4 className="text-xs font-black text-slate-900">Nejbližší termíny</h4><div className="mt-1.5"><AnalysisList items={analysisResult.nearest_deadlines} /></div></div>
+                            <div><h4 className="text-xs font-black text-slate-900">Co ověřit / řešit s klientem</h4><div className="mt-1.5"><AnalysisList items={analysisResult.advisor_actions} /></div></div>
+                            <div><h4 className="text-xs font-black text-slate-900">Co má udělat klient</h4><div className="mt-1.5"><AnalysisList items={analysisResult.client_actions} /></div></div>
+                            <div>
+                              <h4 className="text-xs font-black text-slate-900">Finance a pohledávky</h4>
+                              {analysisResult.finance_summary_lines?.length ? (
+                                <div className="mt-1.5"><AnalysisList items={analysisResult.finance_summary_lines} /></div>
+                              ) : (
+                                <dl className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-emerald-50/70 p-3 text-xs ring-1 ring-emerald-100">
+                                  <div><dt className="text-[10px] text-emerald-800">Pohledávky celkem</dt><dd className="font-black text-emerald-950">{formatMoney(finance.claims_total_amount || selectedCase.claims_total_amount)}</dd></div>
+                                  <div><dt className="text-[10px] text-emerald-800">Přezkoumáno</dt><dd className="font-black text-emerald-950">{finance.reviewed_claims_count ?? selectedCase.claims_count ?? '—'}</dd></div>
+                                  <div><dt className="text-[10px] text-emerald-800">Očekávání 3 roky</dt><dd className="font-black text-emerald-950">{finance.expected_satisfaction_3y_percent == null ? '—' : `${finance.expected_satisfaction_3y_percent} %`}</dd></div>
+                                  <div><dt className="text-[10px] text-emerald-800">Očekávání 5 let</dt><dd className="font-black text-emerald-950">{finance.expected_satisfaction_5y_percent == null ? '—' : `${finance.expected_satisfaction_5y_percent} %`}</dd></div>
+                                </dl>
+                              )}
+                            </div>
+                            {analysisResult.insolvency_evaluation && <div><h4 className="text-xs font-black text-slate-900">Vyhodnocení oddlužení</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.insolvency_evaluation}</p></div>}
+                            <div><h4 className="text-xs font-black text-slate-900">Nejistoty pro aktuální práci</h4><div className="mt-1.5"><AnalysisList items={analysisResult.uncertainties} empty="Žádné uvedené." /></div></div>
+                            <p className="border-t border-slate-100 pt-2 text-[11px] text-slate-500">Jistota výstupu: <strong>{analysisResult.confidence || 'neuvedena'}</strong></p>
+                          </div>
+                        ) : (
+                          <div className="mt-4 space-y-4">
+                            {analysisResult.history_summary && <div><h4 className="text-xs font-black text-slate-900">Stručný vývoj</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.history_summary}</p></div>}
+                            <div><h4 className="text-xs font-black text-slate-900">Časová osa</h4><div className="mt-1.5"><AnalysisList items={analysisResult.proceeding_evolution} /></div></div>
+                          </div>
+                        )}
+                      </section>
                     </div>
                   )}
                 </article>

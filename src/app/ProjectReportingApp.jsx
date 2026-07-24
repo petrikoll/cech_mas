@@ -4720,7 +4720,9 @@ function App() {
             document_id: document.document_id,
             title: document.title,
             event_date: document.event_date,
-            source_url: document.source_url
+            source_url: document.source_url,
+            is_main: document.is_main,
+            analysis_json: document.analysis_json
           }))
         })
       });

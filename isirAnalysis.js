@@ -1,3 +1,9 @@
+import {
+  buildCaseStudyAnalysisPrompt,
+  buildCaseStudyFinalPrompt,
+  buildCaseStudyShorteningPrompt
+} from './isirPrompts.js';
+
 const MAX_REQUEST_BYTES = 512 * 1024;
 const MAX_DOCUMENTS = 10;
 const MAX_PDF_BYTES = 18 * 1024 * 1024;
@@ -55,52 +61,36 @@ function parseGeminiJson(payload) {
   return parsed;
 }
 
-function analysisPrompt({ caseItem, client, documents }) {
-  const documentIndex = documents
-    .map((document, index) => `${index + 1}. ID ${document.document_id}; ${document.event_date || 'bez data'}; ${document.title || 'Dokument ISIR'}`)
-    .join('\n');
-  return `Jsi odborný asistent českého dluhového poradce. Analyzuj přiložené dokumenty z insolvenčního rejstříku.
+function parseGeminiText(payload) {
+  const text = payload?.candidates?.[0]?.content?.parts
+    ?.map((part) => part.text || '')
+    .join('')
+    .trim();
+  if (!text) throw new Error('Gemini nevrátil text kazuistiky.');
+  return stripJsonFence(text);
+}
 
-Klient: ${String(client?.fullName || '').trim() || 'neuveden'}
-Spisová značka: ${String(caseItem?.case_number || '').trim() || 'neuvedena'}
-Stav řízení: ${String(caseItem?.case_status || '').trim() || 'neuveden'}
-Dokumenty:
-${documentIndex}
-
-Pravidla:
-- Používej pouze skutečnosti obsažené v přiložených PDF. Nic nedoplňuj odhadem.
-- Rozlišuj datum dokumentu, datum právní moci a budoucí lhůty.
-- Částky vracej jako čísla bez měnových znaků, pokud je lze bezpečně určit.
-- Pokud je údaj nejistý nebo rozporný, uveď jej v poli uncertainties.
-- Nejde o právní zastoupení. Doporučení formuluj jako kontrolní kroky pro poradce a klienta.
-- Každé shrnutí dokumentu přiřaď přesně k ID ze seznamu.
-- Vrať pouze platný JSON bez markdownového plotu.
-
-Požadovaný tvar:
-{
-  "status_now": "souvislé stručné shrnutí aktuálního stavu",
-  "nearest_deadlines": [{"date":"YYYY-MM-DD nebo prázdné","label":"co a proč"}],
-  "advisor_actions": ["co ověřit nebo řešit s klientem"],
-  "client_actions": ["co má udělat klient"],
-  "finances": {
-    "reviewed_claims_count": null,
-    "claims_total_amount": null,
-    "current_satisfaction_percent": null,
-    "expected_satisfaction_3y_percent": null,
-    "expected_satisfaction_5y_percent": null,
-    "trustee_fee_total": null,
-    "monthly_payment": null,
-    "summary": ["další podstatné finanční údaje"]
-  },
-  "proceeding_evolution": [{"date":"YYYY-MM-DD nebo prázdné","event":"významný krok"}],
-  "insolvency_evaluation": "vyhodnocení splnění oddlužení, jen pokud je doloženo",
-  "uncertainties": ["co nelze bezpečně ověřit"],
-  "confidence": "vysoká|střední|nízká",
-  "document_summaries": [
-    {"document_id":"ID ze seznamu","category":"typ dokumentu","summary":"věcný obsah a dopad"}
-  ],
-  "case_study": "ucelená anonymně formulovaná odborná kazuistika vhodná pro DOCX export"
-}`;
+async function generateGemini({ apiKey, parts, json = false, fetchImpl, signal }) {
+  const upstream = await fetchImpl(
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify({
+        contents: [{ role: 'user', parts }],
+        ...(json ? { generationConfig: { responseMimeType: 'application/json' } } : {})
+      }),
+      signal
+    }
+  );
+  const payload = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    throw new Error(payload?.error?.message || `Gemini analýza selhala (HTTP ${upstream.status}).`);
+  }
+  return payload;
 }
 
 async function fetchSelectedPdfs(documents, fetchImpl) {
@@ -141,38 +131,51 @@ async function analyzeIsirDocuments(input, options = {}) {
   if (!documents.length) throw new Error('Vyberte alespoň jeden dokument k analýze.');
 
   const pdfs = await fetchSelectedPdfs(documents, fetchImpl);
+  const currentDate = new Date().toISOString().slice(0, 10);
   const parts = [
-    { text: analysisPrompt({ caseItem: input.case, client: input.client, documents }) },
+    { text: buildCaseStudyAnalysisPrompt({
+      caseItem: input.case,
+      client: input.client,
+      documents,
+      currentDate
+    }) },
     ...pdfs.flatMap((document) => [
       { text: `Následuje PDF s ID ${document.document_id}: ${document.title || 'Dokument ISIR'}` },
       { inlineData: { mimeType: 'application/pdf', data: document.buffer.toString('base64') } }
     ])
   ];
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 120_000);
+  const timeout = setTimeout(() => controller.abort(), 240_000);
   try {
-    const upstream = await fetchImpl(
-      `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-goog-api-key': apiKey
-        },
-        body: JSON.stringify({
-          contents: [{ role: 'user', parts }],
-          generationConfig: {
-            temperature: 0.15,
-            maxOutputTokens: 8192,
-            responseMimeType: 'application/json'
-          }
-        }),
+    const workingPayload = await generateGemini({
+      apiKey,
+      parts,
+      json: true,
+      fetchImpl,
+      signal: controller.signal
+    });
+    const workingAnalysis = parseGeminiJson(workingPayload);
+    const finalPayload = await generateGemini({
+      apiKey,
+      parts: [{
+        text: buildCaseStudyFinalPrompt({
+          workingAnalysis,
+          caseItem: input.case,
+          currentDate
+        })
+      }],
+      fetchImpl,
+      signal: controller.signal
+    });
+    let caseStudy = parseGeminiText(finalPayload);
+    if (caseStudy.length > 6000) {
+      const shortenedPayload = await generateGemini({
+        apiKey,
+        parts: [{ text: buildCaseStudyShorteningPrompt(caseStudy) }],
+        fetchImpl,
         signal: controller.signal
-      }
-    );
-    const payload = await upstream.json().catch(() => ({}));
-    if (!upstream.ok) {
-      throw new Error(payload?.error?.message || `Gemini analýza selhala (HTTP ${upstream.status}).`);
+      });
+      caseStudy = parseGeminiText(shortenedPayload);
     }
     return {
       analysis_id: `${String(input.case?.case_id || 'case')}-${Date.now()}`,
@@ -183,7 +186,10 @@ async function analyzeIsirDocuments(input, options = {}) {
       document_ids: documents.map((document) => String(document.document_id || '')),
       model: GEMINI_MODEL,
       created_at: new Date().toISOString(),
-      result: parseGeminiJson(payload)
+      result: {
+        working_case_analysis: workingAnalysis.working_case_analysis || workingAnalysis,
+        case_study: caseStudy
+      }
     };
   } finally {
     clearTimeout(timeout);
@@ -216,5 +222,6 @@ export {
   analyzeIsirDocuments,
   handleIsirAnalysisRequest,
   normalizeIsirPdfUrl,
-  parseGeminiJson
+  parseGeminiJson,
+  parseGeminiText
 };
