@@ -5,15 +5,10 @@ Cílem není finální text pro web, ale přesné zachycení toho, co se v říz
 
 Dostaneš:
 1. ověřená systémová data z aplikace,
-2. STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF uložená v databázi,
-3. seznam dokumentů z insolvenčního rejstříku,
-4. vybraná PDF pro kontext řízení.
+2. seznam dokumentů z insolvenčního rejstříku,
+3. vybraná PDF pro kontext řízení.
 
-Priorita zdrojů:
-- Pro finanční a procentuální údaje používej přednostně STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF.
-- PDF používej hlavně pro kontext řízení a vysvětlení vývoje.
-- Lhůtu přihlášek, počet přihlášek a celkovou výši pohledávek přebírej výhradně ze systémových/strukturovaných dat dodaných aplikací.
-- Pokud strukturovaná data obsahují konkrétní částku, procento, počet, datum nebo doporučení správce, nesmíš je nahrazovat odhadem z textu PDF.
+PDF používej pro pochopení kontextu řízení. Číselné údaje o lhůtě přihlášek, počtu přihlášek a celkové výši pohledávek však přebírej výhradně ze systémových dat dodaných aplikací.
 
 Důležité pravidlo času:
 - Vždy pracuj s aktuálním datem zpracování uvedeným v systémových datech.
@@ -29,8 +24,7 @@ Vrať pouze validní JSON v tomto formátu:
     "nearest_deadlines_and_events": ["datum – událost – co hlídat"],
     "advisor_tasks_now": ["co má poradce s klientem ověřit, vysvětlit nebo připravit nyní"],
     "client_tasks_now": ["co má klient udělat nyní nebo v nejbližší době"],
-    "finance_and_claims_now": ["finanční a pohledávkové údaje významné pro aktuální postup; používat přesné údaje ze strukturovaných dat; systémové částky nepřepočítávat ani neodhadovat"],
-    "debt_relief_evaluation": ["pokud existují strukturovaná data o plnění nebo splnění oddlužení, uveď přehled očekávání/průběh/skutečnost: přezkoumané pohledávky, průběžné uspokojení, konečné uspokojení, doporučení správce, osvobození nebo čekání na rozhodnutí soudu"],
+    "finance_and_claims_now": ["finanční a pohledávkové údaje významné pro aktuální postup; systémové částky nepřepočítávat"],
     "uncertainties_affecting_current_work": ["neověřené, rozporné nebo průběžné údaje, které ovlivňují aktuální práci poradce"],
     "case_history_summary": ["stručný dosavadní vývoj případu"],
     "timeline": ["datum – dokument nebo událost – praktický význam"],
@@ -48,8 +42,6 @@ Pravidla:
 - Nevypočítávej lhůtu přihlášek.
 - Nevypočítávej počet přihlášek.
 - Nevypočítávej celkovou výši pohledávek.
-- Nepoužívej formulace „cca“, „odhadem“, „pravděpodobně“ u částek a procent, pokud jsou ve strukturovaných datech konkrétní hodnoty.
-- Pokud existují strukturovaná data o přezkumu, plnění nebo splnění oddlužení, musí se objevit v části finance_and_claims_now a případně debt_relief_evaluation.
 - Pokud systémový údaj chybí, napiš „není bezpečně ověřeno“.
 - Pokud údaj není jistý, označ ho jako neověřený, průběžný nebo rozporný.
 - Neopakuj stejné informace vícekrát.
@@ -70,8 +62,6 @@ Nepřidávej žádný úvod ani závěr mimo sekce.
 
 Použij přesně tyto 2 sekce:
 
-Pokud ověřená systémová data obsahují STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF, musí se jejich klíčové finanční a procentuální údaje promítnout do první sekce. Neignoruj je.
-
 [[SECTION:current:Aktuální stav a co řešit]]
 Max. 3 500 znaků. Tato sekce je hlavní pracovní část pro poradce.
 Uveď:
@@ -80,8 +70,7 @@ Uveď:
 - nejbližší termíny,
 - co má poradce ověřit,
 - co má klient udělat,
-- finanční nebo pohledávkové údaje ze strukturovaných dat, pokud existují,
-- u ukončeného oddlužení krátké vyhodnocení očekávání / průběh / skutečnost,
+- finanční nebo pohledávkové údaje, pokud jsou důležité pro aktuální postup,
 - neověřené nebo průběžné údaje, pokud ovlivňují aktuální práci,
 - jistotu výstupu.
 
@@ -99,13 +88,7 @@ Co má udělat klient:
 - ...
 
 Finance a pohledávky:
-- Přezkoumané pohledávky: ...
-- Poslední průběžné uspokojení: ...
-- Konečné uspokojení / splnění oddlužení: ...
-- Doporučení správce: ...
-
-Vyhodnocení oddlužení, pokud je případ ukončený nebo je k dispozici zpráva o splnění:
-- Očekávání / průběh / skutečnost: ...
+- ...
 
 Nejistoty pro aktuální práci:
 - ...
@@ -141,10 +124,7 @@ Pravidla:
 - Nevyvozuj právní závěry.
 - Nepiš obecné právní poučky.
 - Pokud údaj není jistý, označ ho jako neověřený, průběžný nebo rozporný.
-- Lhůtu přihlášek, počet přihlášek a celkovou výši pohledávek přebírej pouze ze systémových/strukturovaných dat.
-- Pro přezkoumané pohledávky, procenta uspokojení, částky vyplacené věřitelům/správci, splnění oddlužení a doporučení správce používej přednostně STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF.
-- Pokud jsou strukturovaná data dostupná, nepiš místo nich obecné odhady ani „cca“.
-- Nepoužívej markdownové zvýraznění pomocí **hvězdiček**. Piš čistý text, odrážky a krátké popisky.
+- Lhůtu přihlášek, počet přihlášek a celkovou výši pohledávek přebírej pouze ze systémových dat.
 - Termíny starší než aktuální datum zpracování neuváděj v první sekci jako „nejbližší termíny“ ani jako budoucí očekávané kroky.
 - Jestliže pracovní rozbor obsahuje starý termín jako aktuální, ve finálním výstupu ho oprav: přesuň ho do historie nebo napiš, že z dostupných dokumentů není zřejmé, jak byl po tomto termínu vyřešen.`;
 
@@ -196,7 +176,7 @@ export const buildCaseStudyAnalysisPrompt = ({
 }) => {
   const deadlineStatus = getClaimsDeadlineStatus(caseItem?.claims_deadline, currentDate);
   const documentsById = new Map(
-    [...contextDocuments, ...documents].map((document) => [String(document.document_id || ''), document])
+    [...documents, ...contextDocuments].map((document) => [String(document.document_id || ''), document])
   );
   const structuredDocuments = [...documentsById.values()]
     .map((document) => {
@@ -244,14 +224,6 @@ V části „Stav nyní“ výslovně uveď, zda lhůta pro podávání přihlá
 běží, končí dnes, skončila, nebo není bezpečně ověřena. Tento stav znovu nepočítej
 a neměň podle staršího textu nebo PDF.
 
-PŘEDCHOZÍ ÚPLNÁ KAZUISTIKA:
-${caseItem?.ai_case_study || 'Zatím neexistuje.'}
-
-Předchozí kazuistika je základ aktualizace. Zachovej stále platná fakta a historii,
-ale oprav aktuální stav, lhůty, úkoly a finance podle dnešních systémových dat
-a nových dokumentů. Nová kazuistika nesmí ztratit dříve doložené části jen proto,
-že tentokrát byly ke čtení předány pouze nové dokumenty.
-
 STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF:
 ${structuredDocuments.length ? JSON.stringify(structuredDocuments, null, 2) : 'Nejsou k dispozici.'}
 
@@ -260,7 +232,7 @@ ${contextDocuments.map((document, index) =>
     `${index + 1}. ${document.event_date || 'bez data'} – ${document.title || 'Dokument ISIR'} – ID ${document.document_id}`
   ).join('\n')}
 
-NOVÉ DOKUMENTY PŘEDANÉ K AKTUALIZACI:
+OBSAHOVĚ PŘILOŽENÉ PDF DOKUMENTY PRO KONTEXT KAZUISTIKY:
 ${documents.map((document, index) =>
     `${index + 1}. ${document.event_date || 'bez data'} – ${document.title || 'Dokument ISIR'} – ID ${document.document_id}`
   ).join('\n')}`;

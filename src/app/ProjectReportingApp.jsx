@@ -78,6 +78,12 @@ import {
 } from '../components/ui.jsx';
 import { appId, auth, db, hasFirebaseConfig } from '../lib/firebase.js';
 import { parseAiJson, redactClientIdentifiers, sanitizeAiInput, validatePlanOutput, validateRecordOutput } from '../lib/aiSafety.js';
+import { getClaimsDeadlineStatus } from '../../isirPrompts.js';
+import {
+  isCaseStudyRelevantDocument,
+  isClaimApplicationDocument,
+  isStructuredIsirDocument
+} from '../../isirDocumentPrompts.js';
 import { buildClientCaseAiPrompt, filterClientCaseAiRecords } from '../lib/clientCaseSummary.js';
 import {
   KA1_NOTE_AI_MODEL,
@@ -139,6 +145,54 @@ const Ka01View = React.lazy(() => import('./Ka01View.jsx'));
 const Ka2CaseManagementView = React.lazy(() => import('./Ka2CaseManagementView.jsx'));
 const ReportingView = React.lazy(() => import('./ReportingView.jsx'));
 const IsirView = React.lazy(() => import('./IsirView.jsx'));
+
+const isYesValue = (value) => /^(ano|true|1)$/i.test(String(value || ''));
+
+const parseIsirMoneyValue = (value) => {
+  let text = String(value ?? '').replace(/\u00a0/g, ' ').replace(/[^\d,.\s-]/g, '').trim();
+  if (!text) return 0;
+  text = text.replace(/\s/g, '');
+  if (text.includes(',') && text.includes('.')) text = text.replace(/\./g, '').replace(',', '.');
+  else if (text.includes(',')) text = text.replace(',', '.');
+  else if ((text.match(/\./g) || []).length > 1) text = text.replace(/\./g, '');
+  const number = Number(text);
+  return Number.isFinite(number) ? number : 0;
+};
+
+const selectOriginalCaseStudyDocuments = (documents) => {
+  const available = (Array.isArray(documents) ? documents : [])
+    .filter((document) => document?.source_url)
+    .slice()
+    .sort((left, right) => String(left.event_date || '').localeCompare(String(right.event_date || '')));
+  if (available.length <= 14) return available;
+
+  const claimDocuments = available.filter((document) =>
+    isClaimApplicationDocument(document) && isYesValue(document.is_main)
+  );
+  const importantWords = [
+    'usnesení',
+    'vyhláška',
+    'sdělení insolvenčního správce',
+    'zpráva',
+    'přezkumn',
+    'seznam',
+    'oddlužení',
+    'opatření',
+    'soupis'
+  ];
+  const importantDocuments = available.filter((document) =>
+    !claimDocuments.includes(document)
+    && importantWords.some((word) => String(document.title || '').toLocaleLowerCase('cs').includes(word))
+  );
+  const selected = [];
+  [...claimDocuments, ...importantDocuments, ...available].forEach((document) => {
+    if (selected.length >= 14 || selected.includes(document)) return;
+    selected.push(document);
+  });
+  return selected.sort((left, right) =>
+    String(left.event_date || '').localeCompare(String(right.event_date || ''))
+  );
+};
 
 const PROJECT_BACKGROUND_IMAGES = Object.freeze({
   CECH: cechBackgroundImage,
@@ -4738,10 +4792,10 @@ function App() {
       let structuredContextBudget = 120000;
       const serializedContextDocuments = contextDocuments.map((document) => {
         const analysisJson = String(document.analysis_json || '');
-        const isStructuredMainDocument = (
-          /zpráva.*(přezkum|oddlužení|plnění|splnění)|soupis.*majet|seznam.*přihlášen|vyúčtování.*správce/i
-        ).test(String(document.title || ''));
+        const isStructuredMainDocument = isStructuredIsirDocument(document);
         const includeAnalysis = (
+          mode === 'case-study'
+          &&
           isStructuredMainDocument
           && analysisJson
           && analysisJson.length <= structuredContextBudget
@@ -4772,7 +4826,7 @@ function App() {
             event_date: document.event_date,
             source_url: document.source_url,
             is_main: document.is_main,
-            analysis_json: document.analysis_json
+            analysis_json: mode === 'document-summary' ? document.analysis_json : ''
           })),
           context_documents: serializedContextDocuments
         })
@@ -4807,7 +4861,8 @@ function App() {
       const storedAnalysis = {
         ...(savedResult.analysis || completedAnalysis),
         result: completedAnalysis.result,
-        result_json: JSON.stringify(completedAnalysis.result || {})
+        result_json: JSON.stringify(completedAnalysis.result || {}),
+        saved_case: savedResult.case || null
       };
       setInsolvencyAnalyses((previous) => [
         storedAnalysis,
@@ -4822,11 +4877,15 @@ function App() {
         const byId = Object.fromEntries(savedResult.documents.map((item) => [item.document_id, item]));
         setInsolvencyDocuments((previous) => previous.map((item) => byId[item.document_id] || item));
       }
-      const message = mode === 'data-verification'
-        ? 'Kontrolní návrhy změn byly připraveny. Nic se nezměnilo bez vašeho potvrzení.'
-        : mode === 'case-study'
-          ? 'AI kazuistika byla dokončena a uložena.'
-          : `Samostatná shrnutí ${documents.length} dokumentů byla dokončena a uložena.`;
+      const message = mode === 'case-study'
+        ? 'AI kazuistika byla dokončena a uložena.'
+        : mode === 'structured-extraction'
+          ? `Strukturované čtení ${documents.length} formulářů bylo dokončeno.`
+          : mode === 'claim-extraction'
+            ? `Částky z ${documents.length} přihlášek byly přečteny.`
+            : mode === 'data-verification'
+              ? 'Kontrolní návrhy změn byly připraveny. Nic se nezměnilo bez vašeho potvrzení.'
+              : 'AI shrnutí vybraných dokumentů bylo dokončeno a uloženo.';
       setProjectInsolvencyNotice(message);
       setFlash(message);
       return storedAnalysis;
@@ -4859,63 +4918,111 @@ function App() {
     const snapshotDocuments = Array.isArray(snapshot?.documents) ? snapshot.documents : [];
     let updatedCaseStudies = 0;
     for (const caseItem of snapshotCases) {
-      const allCaseDocuments = snapshotDocuments
+      let workingCase = { ...caseItem };
+      let allCaseDocuments = snapshotDocuments
         .filter((item) => item.case_id === caseItem.case_id)
         .sort((left, right) =>
           String(right.event_date || '').localeCompare(String(left.event_date || ''))
         );
       const newDocuments = allCaseDocuments
         .filter((item) =>
-          /^(ano|true|1)$/i.test(String(item.is_new || ''))
-          && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
+          isYesValue(item.is_new)
+          && !isYesValue(item.included_in_case_study)
         )
-        .sort((left, right) => {
-          const priority = (item) => {
-            const title = String(item.title || '');
-            if (
-              /zpráva.*(přezkum|oddlužení|plnění|splnění)|soupis.*(majet|přihlášen)|seznam.*přihlášen|vyúčtování.*správce/i
-                .test(title)
-            ) return 2;
-            return /^(ano|true|1)$/i.test(String(item.is_main || '')) ? 1 : 0;
-          };
-          return priority(right) - priority(left)
-            || String(right.event_date || '').localeCompare(String(left.event_date || ''));
-        })
-        .slice(0, 10);
-      if (!newDocuments.length) continue;
+        .sort((left, right) => String(left.event_date || '').localeCompare(String(right.event_date || '')));
+      const hasCaseStudy = Boolean(String(caseItem.ai_case_study || '').trim());
+      const newRelevantDocuments = newDocuments.filter(isCaseStudyRelevantDocument);
+      if (hasCaseStudy && !newRelevantDocuments.length) continue;
+      if (!allCaseDocuments.length) continue;
+
       try {
-        const documentsWithoutSummary = newDocuments.filter((document) => !document.analysis_json);
-        let summaryById = {};
-        if (documentsWithoutSummary.length) {
-          const documentAnalysis = await analyzeIsirDocuments({
+        const todayParts = new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Europe/Prague',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).formatToParts(new Date());
+        const todayValues = Object.fromEntries(todayParts.map((part) => [part.type, part.value]));
+        const today = `${todayValues.year}-${todayValues.month}-${todayValues.day}`;
+        const deadlineStatus = getClaimsDeadlineStatus(workingCase.claims_deadline, today);
+        const deadlineMessage = deadlineStatus.status === 'active'
+          ? `Lhůta běží do ${formatDateLabel(deadlineStatus.deadline)}.`
+          : deadlineStatus.status === 'ends_today'
+            ? 'Lhůta pro podávání přihlášek končí dnes.'
+            : deadlineStatus.status === 'expired'
+              ? `Lhůta skončila ${formatDateLabel(deadlineStatus.deadline)}.`
+              : 'Lhůtu nelze bezpečně určit; jednotlivé přihlášky se nečtou.';
+        setProjectInsolvencyNotice(
+          `ISIR · ID ${client.clientNumber || '—'} · ověřuji, zda běží lhůta pro podávání přihlášek… ${deadlineMessage}`
+        );
+
+        if (deadlineStatus.status === 'active' || deadlineStatus.status === 'ends_today') {
+          const existingTotal = parseIsirMoneyValue(workingCase.claims_total_amount);
+          const claimCandidates = (existingTotal > 0 ? newDocuments : allCaseDocuments)
+            .filter((document) =>
+              isClaimApplicationDocument(document) && isYesValue(document.is_main)
+            )
+            .filter((document) =>
+              !String(document.analysis_json || '').includes('"claim_amount_extraction"')
+            )
+            .slice(0, 14);
+          if (claimCandidates.length) {
+            const claimAnalysis = await analyzeIsirDocuments({
+              client,
+              caseItem: workingCase,
+              documents: claimCandidates,
+              contextDocuments: allCaseDocuments,
+              mode: 'claim-extraction'
+            });
+            const extractedTotal = Number(claimAnalysis?.result?.claims_total_amount);
+            if (Number.isFinite(extractedTotal)) {
+              workingCase = { ...workingCase, claims_total_amount: extractedTotal };
+            }
+            if (claimAnalysis?.saved_case) workingCase = { ...workingCase, ...claimAnalysis.saved_case };
+          }
+        }
+
+        const structuredDocuments = allCaseDocuments
+          .filter((document) =>
+            isStructuredIsirDocument(document)
+            && !String(document.analysis_json || '').includes('"structured_extraction"')
+          )
+          .filter((document) => !hasCaseStudy || isYesValue(document.is_new))
+          .slice(0, 14);
+        if (structuredDocuments.length) {
+          const structuredAnalysis = await analyzeIsirDocuments({
             client,
-            caseItem,
-            documents: documentsWithoutSummary,
+            caseItem: workingCase,
+            documents: structuredDocuments,
             contextDocuments: allCaseDocuments,
-            mode: 'document-summary'
+            mode: 'structured-extraction'
           });
-          summaryById = Object.fromEntries(
-            (documentAnalysis?.result?.document_summaries || [])
+          const extractionById = Object.fromEntries(
+            (structuredAnalysis?.result?.structured_extractions || [])
               .map((item) => [String(item.document_id), item])
           );
+          allCaseDocuments = allCaseDocuments.map((document) => {
+            const extraction = extractionById[String(document.document_id)];
+            return extraction
+              ? { ...document, analysis_json: JSON.stringify(extraction) }
+              : document;
+          });
+          if (structuredAnalysis?.saved_case) {
+            workingCase = { ...workingCase, ...structuredAnalysis.saved_case };
+          }
         }
-        const enrichedNewDocuments = newDocuments.map((document) => ({
-          ...document,
-          analysis_json: summaryById[String(document.document_id)]
-            ? JSON.stringify(summaryById[String(document.document_id)])
-            : document.analysis_json
-        }));
+
+        const caseStudyDocuments = selectOriginalCaseStudyDocuments(allCaseDocuments).slice(0, 14);
+        if (!caseStudyDocuments.length) continue;
+        setProjectInsolvencyNotice(
+          `ISIR · ID ${client.clientNumber || '—'} · ${
+            hasCaseStudy ? 'aktualizuji' : 'vytvářím'
+          } kazuistiku z podstatných dokumentů…`
+        );
         await analyzeIsirDocuments({
           client,
-          caseItem,
-          documents: enrichedNewDocuments,
-          contextDocuments: allCaseDocuments,
-          mode: 'data-verification'
-        });
-        await analyzeIsirDocuments({
-          client,
-          caseItem,
-          documents: enrichedNewDocuments,
+          caseItem: workingCase,
+          documents: caseStudyDocuments,
           contextDocuments: allCaseDocuments,
           mode: 'case-study'
         });
@@ -8584,7 +8691,6 @@ ${rawPlanOutput}` }] }],
               onCheckProject={verifyProjectInsolvencies}
               onArchiveDocument={archiveIsirDocument}
               onAnalyzeDocuments={analyzeIsirDocuments}
-              onApplyDataCorrections={applyIsirDataCorrections}
               onMarkDocumentsSeen={markIsirDocumentsSeen}
               onExportCaseStudy={exportIsirCaseStudy}
               onImportLegacyData={importLegacyIsirData}

@@ -129,6 +129,17 @@ test('importovaná lokální ISIR analýza se uloží jako plnohodnotná kazuist
   assert.match(insolvencyVerificationSource, /is_new:\s*'Ne'/);
 });
 
+test('kazuistika nepřepisuje systémové částky odhadem AI', () => {
+  const caseStudyBranch = insolvencyVerificationSource.slice(
+    insolvencyVerificationSource.indexOf('if (isCaseStudy)'),
+    insolvencyVerificationSource.indexOf("} else if (row.kind === 'CLAIM_AMOUNT_EXTRACTION')")
+  );
+  assert.doesNotMatch(caseStudyBranch, /claims_count:/);
+  assert.doesNotMatch(caseStudyBranch, /claims_total_amount:/);
+  assert.match(insolvencyVerificationSource, /row\.kind === 'CLAIM_AMOUNT_EXTRACTION'/);
+  assert.match(insolvencyVerificationSource, /row\.kind === 'STRUCTURED_DOCUMENT_EXTRACTION'/);
+});
+
 test('číslování vychází pouze z obsazených klientských řádků', () => {
   const rows = [
     ['CECH', 'Jan', 'Novák', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 68, ''],

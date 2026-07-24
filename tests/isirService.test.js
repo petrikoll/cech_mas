@@ -1,10 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  addMonths,
   buildSoapRequest,
   parseDocumentsFromDetail,
   parseSoapResponse
 } from '../isirService.js';
+
+test('lhůta přihlášek se počítá dva měsíce od usnesení a drží konec měsíce', () => {
+  assert.equal(addMonths('2026-12-31', 2), '2027-02-28');
+  assert.equal(addMonths('2026-03-15', 2), '2026-05-15');
+});
 
 test('ISIR SOAP request keeps child fields unqualified as required by the official XSD', () => {
   const xml = buildSoapRequest({
@@ -48,11 +54,23 @@ test('ISIR SOAP response maps case data', () => {
 
 test('ISIR detail parser deduplicates PDF links and keeps event date', () => {
   const html = `
-    <tr><td>3. 4. 2026</td><td><a href="/isir/doc/dokument.PDF?id=1">Rozhodnutí o úpadku</a></td></tr>
+    <tr>
+      <td>A-12</td><td>3. 4. 2026</td><td>10:15</td>
+      <td>Usnesení o úpadku spojené s povolením oddlužení</td>
+      <td>
+        <a href="/isir/doc/dokument.PDF?id=1">plný text</a>
+        <a href="/isir/doc/dokument.PDF?id=2">plný text</a>
+      </td>
+    </tr>
     <a href="/isir/doc/dokument.PDF?id=1">duplikát</a>`;
   const documents = parseDocumentsFromDetail(html, '12-INS-123-2026');
-  assert.equal(documents.length, 1);
+  assert.equal(documents.length, 2);
   assert.equal(documents[0].event_date, '2026-04-03');
-  assert.equal(documents[0].title, 'Rozhodnutí o úpadku');
+  assert.equal(documents[0].title, 'Usnesení o úpadku spojené s povolením oddlužení');
+  assert.equal(documents[0].document_type, 'hlavní dokument');
+  assert.equal(documents[0].is_main, 'Ano');
+  assert.equal(documents[1].title, 'Usnesení o úpadku spojené s povolením oddlužení');
+  assert.equal(documents[1].document_type, 'vedlejší dokument');
+  assert.equal(documents[1].is_main, 'Ne');
   assert.match(documents[0].source_url, /^https:\/\/isir\.justice\.cz/);
 });

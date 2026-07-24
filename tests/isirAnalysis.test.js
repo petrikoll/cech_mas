@@ -5,9 +5,16 @@ import {
   minimizeSummary,
   normalizeIsirPdfUrl,
   normalizedCorrections,
+  parseLocalizedNumber,
   parseGeminiJson,
   parseGeminiText
 } from '../isirAnalysis.js';
+
+test('ISIR AI bezpečně převádí české formáty částek', () => {
+  assert.equal(parseLocalizedNumber('1 234,50 Kč'), 1234.5);
+  assert.equal(parseLocalizedNumber('1.234,50'), 1234.5);
+  assert.equal(Number.isNaN(parseLocalizedNumber('neuvedeno')), true);
+});
 import {
   buildCaseStudyAnalysisPrompt,
   CASE_STUDY_ANALYSIS_PROMPT,
@@ -47,7 +54,6 @@ test('ISIR AI načte strukturovaný JSON z odpovědi Gemini', () => {
 
 test('ISIR AI používá původní dvoukrokovou logiku kazuistiky a Gemini 2.5 Flash', () => {
   assert.match(CASE_STUDY_ANALYSIS_PROMPT, /1\. krok zpracování kazuistiky/);
-  assert.match(CASE_STUDY_ANALYSIS_PROMPT, /STRUKTUROVANÁ DATA Z FORMULÁŘOVÝCH PDF/);
   assert.match(CASE_STUDY_FINAL_PROMPT, /2\. krok zpracování/);
   assert.match(CASE_STUDY_FINAL_PROMPT, /\[\[SECTION:current:Aktuální stav a co řešit\]\]/);
   assert.match(CASE_STUDY_FINAL_PROMPT, /\[\[SECTION:history:Vývoj řízení\]\]/);
@@ -115,7 +121,7 @@ test('kazuistika nejprve systémově ověří, zda běží lhůta přihlášek',
 
   assert.match(prompt, /PRVNÍ POVINNÝ KROK/);
   assert.match(prompt, /"status": "active"/);
-  assert.match(prompt, /Předchozí úplná kazuistika/);
   assert.match(prompt, /debt_relief_structured_report/);
   assert.match(prompt, /Kompletní seznam dokumentů podle ISIR/);
+  assert.match(prompt, /OBSAHOVĚ PŘILOŽENÉ PDF DOKUMENTY/);
 });
