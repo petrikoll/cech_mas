@@ -12,9 +12,11 @@ import { handleIsirAnalysisRequest } from './isirAnalysis.js';
 import { handleIsirAiQueueRequest } from './isirAiQueueEndpoint.js';
 import { handleIsirDocumentRequest } from './isirDocumentProxy.js';
 import documentCreatorApp from './document-creator/app.js';
+import { handleElaiLegalRequest } from './elaiHelperService.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const distDir = resolve(__dirname, 'dist');
+const elaiHelperDir = resolve(__dirname, 'elai-helper');
 const port = Number(process.env.PORT || 4173);
 
 
@@ -96,6 +98,27 @@ const server = createServer((request, response) => {
   }
 
   const url = new URL(request.url || '/', `http://${request.headers.host}`);
+
+  if (request.method === 'POST' && url.pathname === '/elai-helper/api/legal-query') {
+    void handleElaiLegalRequest(request, response);
+    return;
+  }
+
+  if (url.pathname === '/elai-helper' || url.pathname.startsWith('/elai-helper/')) {
+    const helperRelativePath = normalize(
+      decodeURIComponent(url.pathname.slice('/elai-helper'.length) || '/index.html')
+    )
+      .replace(/^[/\\]+/, '')
+      .replace(/^(\.\.[/\\])+/, '');
+    const helperPath = join(elaiHelperDir, helperRelativePath || 'index.html');
+    if (helperPath.startsWith(elaiHelperDir) && existsSync(helperPath) && statSync(helperPath).isFile()) {
+      sendFile(response, helperPath);
+      return;
+    }
+    response.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    response.end('E.L.A.I. helper resource was not found.');
+    return;
+  }
 
   if (url.pathname === '/document-creator' || url.pathname.startsWith('/document-creator/')) {
     request.url = (request.url || '/').replace(/^\/document-creator(?=\/|\?|$)/, '') || '/';

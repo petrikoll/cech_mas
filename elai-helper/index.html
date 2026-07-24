@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>E.L.A.I. - Právní poradce</title>
+  <meta
+    name="description"
+    content="E.L.A.I. právní poradce s ověřenými zdroji, citacemi a validací výstupu."
+  />
+  <link rel="stylesheet" href="/elai-helper/styles.css" />
+</head>
+<body>
+  <div class="page-shell calculator-page-shell helper-page-shell">
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="/" target="_top">
+          <div class="brand-mark">PT</div>
+          <div class="brand-text">
+            <strong>Portál týmu</strong>
+            <span>E.L.A.I. - právní poradce s ověřenými zdroji a citacemi</span>
+          </div>
+        </a>
+
+        <div class="header-actions">
+          <a class="btn btn-secondary btn-small" href="/" target="_top">Zpět</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section class="section section-compact" id="pravni-dotaz">
+        <div class="container helper-layout">
+          <section class="card-glass helper-panel">
+            <div class="section-head calculator-head">
+              <div>
+                <p class="section-label">Modul 1</p>
+                <h2>Právní dotaz s RAG a citacemi</h2>
+              </div>
+            </div>
+            <p class="helper-kicker">
+              Cíl: získat odpověď s právní oporou, mírou jistoty a seznamem chybějících vstupů.
+            </p>
+
+            <form id="legalForm" class="helper-form-grid">
+              <label class="field field-wide">
+                <span>Dotaz</span>
+                <textarea id="legalQuestion" class="helper-textarea" required placeholder="Například: Jak postupovat při návrhu oddlužení u klienta s příjmem ze zaměstnání a vyživovací povinností?"></textarea>
+              </label>
+
+              <label class="field field-wide">
+                <span>Kontext případu</span>
+                <textarea id="legalContext" class="helper-textarea" placeholder="Například: datum rozhodnutí, typ dluhu, počet exekucí, stav řízení, zda jde o spotřebitele."></textarea>
+              </label>
+
+              <fieldset class="helper-sources field-wide">
+                <legend>Povolené zdroje</legend>
+                <p id="legalSourcesMeta" class="helper-sources-meta">Načítám whitelist...</p>
+                <div id="legalSourcesList" class="helper-sources-list"></div>
+              </fieldset>
+
+              <label class="field">
+                <span>Typ výstupu</span>
+                <select id="legalOutputType">
+                  <option value="structured_answer">Strukturovaná odpověď</option>
+                  <option value="checklist">Checklist kroků</option>
+                  <option value="risk_review">Riziková analýza</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Požadovaná hloubka</span>
+                <select id="legalDepth">
+                  <option value="short">Stručně</option>
+                  <option value="balanced" selected>Vyváženě</option>
+                  <option value="deep">Detailně</option>
+                </select>
+              </label>
+
+              <div class="field field-wide helper-actions-row">
+                <button type="submit" class="btn btn-primary">Vytvořit odpověď</button>
+                <button type="button" class="btn btn-secondary" id="legalResetBtn">Vyčistit formulář</button>
+              </div>
+            </form>
+          </section>
+
+          <aside class="card-glass helper-output-panel">
+            <div class="section-head calculator-head">
+              <div>
+                <p class="section-label">Validovaný výstup</p>
+                <h2>Výsledek právního dotazu</h2>
+              </div>
+            </div>
+            <div id="legalStatus" class="helper-status">Připraveno k dotazu.</div>
+            <pre id="legalResult" class="helper-result-box">Zde se po validaci zobrazí odpověď.</pre>
+            <p class="helper-note">Tip: když chybí skutková data, AI má vrátit i seznam toho, co je potřeba doplnit.</p>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/elai-helper/elai-legal.js"></script>
+</body>
+</html>

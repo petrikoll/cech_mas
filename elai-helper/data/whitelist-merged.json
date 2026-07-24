@@ -1,0 +1,1613 @@
+{
+  "schema_version": "1.0.0",
+  "config_name": "cz_debt_counseling_ai_source_policy",
+  "jurisdiction": "CZ",
+  "domain": "dluhove_poradenstvi",
+  "language": "cs",
+  "as_of_date": "2026-04-03",
+  "timezone": "Europe/Prague",
+  "description": "Komplexní konfigurační JSON pro whitelist zdrojů, aktivaci právních větví, pravidla jistoty závěru, časovou validaci a denylist pro AI asistenta v oblasti dluhového poradenství v ČR.",
+  "design_principles": {
+    "primary_law_first": true,
+    "effective_text_required": true,
+    "always_on_core": true,
+    "conditional_branches": true,
+    "advisory_sources_cannot_override_law": true,
+    "deny_unofficial_summaries_as_primary_support": true,
+    "confidence_controlled_by_source_strength": true,
+    "temporal_validation_required_for_sensitive_domains": true
+  },
+  "certainty_model": {
+    "levels": [
+      {
+        "id": "certain",
+        "rank": 3,
+        "description": "Lze použít pouze při přímé opoře v primárním závazném předpisu, správném účinném znění a dostatečném skutkovém stavu.",
+        "allowed_phrases": [
+          "podle účinné právní úpravy platí",
+          "právní závěr je",
+          "v tomto režimu se použije"
+        ],
+        "forbidden_if_not_met": [
+          "jednoznačně platí",
+          "je jisté, že",
+          "musí to být takto"
+        ]
+      },
+      {
+        "id": "supported_but_conditional",
+        "rank": 2,
+        "description": "Právní opora existuje, ale výsledek závisí na konkrétním skutkovém detailu, datu nebo doplňujícím režimu.",
+        "required_disclaimer": "Závěr závisí na konkrétních okolnostech a může se změnit podle data, typu dluhu nebo procesního stavu."
+      },
+      {
+        "id": "informational_only",
+        "rank": 1,
+        "description": "Zdroj je informativní, metodický nebo procesní. Nesmí sám vytvořit závazný právní závěr.",
+        "required_disclaimer": "Jde o orientační nebo metodickou informaci, nikoli samostatnou závaznou právní oporu."
+      }
+    ],
+    "promotion_rules": [
+      {
+        "id": "promote_to_certain",
+        "requires_all": [
+          "primary_support_present",
+          "effective_text_verified",
+          "no_source_conflict_unresolved",
+          "material_facts_sufficient"
+        ]
+      },
+      {
+        "id": "cap_to_supported_if_missing_fact",
+        "if_any": [
+          "missing_key_date",
+          "missing_debtor_status",
+          "missing_public_vs_private_debt_classification",
+          "missing_procedural_stage"
+        ],
+        "cap": "supported_but_conditional"
+      },
+      {
+        "id": "cap_to_informational_if_only_advisory",
+        "if_all": [
+          "only_advisory_sources_present"
+        ],
+        "cap": "informational_only"
+      }
+    ]
+  },
+  "global_gates": {
+    "primary_support_gate": {
+      "enabled": true,
+      "rule": "Bez opory v T1 nebo relevantní kombinaci T1+T2/T3 nesmí být finální závěr označen jako certain."
+    },
+    "temporal_gate": {
+      "enabled": true,
+      "rule": "U časově citlivých oblastí musí být ověřeno účinné znění ke dni skutkového děje nebo ke dni relevantního podání."
+    },
+    "advisory_gate": {
+      "enabled": true,
+      "rule": "Metodiky, portály a kalkulátory lze použít jen podpůrně a nesmí samy vytvořit jistý právní závěr."
+    },
+    "fact_sufficiency_gate": {
+      "enabled": true,
+      "rule": "Pokud chybí rozhodující skutkové informace, jistota odpovědi se snižuje."
+    }
+  },
+  "source_conflict_resolution": {
+    "precedence_order": [
+      "zakon",
+      "narizeni_vlady",
+      "vyhlaska",
+      "oficialni_metodika",
+      "portal_info",
+      "kalkulator",
+      "secondary_summary",
+      "unofficial_source"
+    ],
+    "rules": [
+      {
+        "id": "law_over_methodology",
+        "rule": "Při konfliktu mezi zákonem a metodikou vždy vítězí zákon."
+      },
+      {
+        "id": "effective_text_over_old_summary",
+        "rule": "Při konfliktu mezi účinným zněním a starším shrnutím vždy vítězí účinné znění."
+      },
+      {
+        "id": "primary_over_secondary",
+        "rule": "Pokud je dostupný primární zdroj, nesmí být sekundární shrnutí hlavní oporou."
+      },
+      {
+        "id": "official_over_unofficial",
+        "rule": "Neoficiální zdroj nesmí přebít oficiální zdroj."
+      }
+    ]
+  },
+  "temporal_rules": {
+    "sensitive_domains": [
+      "insolvence",
+      "oddluzeni",
+      "nezabavitelne_castky",
+      "davky",
+      "socialni_pomoc",
+      "verejnopravni_vymahani"
+    ],
+    "milestones": [
+      {
+        "id": "insolvency_reform_2024",
+        "effective_from": "2024-10-01",
+        "label": "Nový režim oddlužení a navazující formulářová úprava",
+        "required_for_domains": [
+          "insolvence",
+          "oddluzeni",
+          "formular_oddluzeni"
+        ]
+      },
+      {
+        "id": "social_reform_2025",
+        "effective_from": "2025-10-01",
+        "label": "Nový dávkový režim sociální pomoci",
+        "required_for_domains": [
+          "davky",
+          "socialni_pomoc",
+          "bydleni",
+          "rozpoctovy_dopad"
+        ]
+      },
+      {
+        "id": "social_transition_2025_2026",
+        "effective_from": "2025-10-01",
+        "effective_to": "2026-04-30",
+        "label": "Přechodné období starého a nového dávkového režimu",
+        "required_for_domains": [
+          "davky",
+          "socialni_pomoc"
+        ]
+      }
+    ]
+  },
+  "tiers": [
+    {
+      "id": "T1",
+      "name": "zavazne_jadro",
+      "mode": "always_on",
+      "purpose": "Základní právní rámec pro exekuce, výkon rozhodnutí, srážky a oddlužení.",
+      "allowed_for_final_conclusion": true,
+      "can_support_certain": true
+    },
+    {
+      "id": "T2",
+      "name": "hmotnepravni_vetve",
+      "mode": "conditional",
+      "purpose": "Vznik dluhu, platnost závazku, spotřebitel, smlouvy, SJM, ručení a soukromoprávní dopady.",
+      "allowed_for_final_conclusion": true,
+      "can_support_certain": true
+    },
+    {
+      "id": "T3",
+      "name": "procesni_a_verejnopravni_vetve",
+      "mode": "conditional",
+      "purpose": "Veřejnoprávní dluhy, daňové vymáhání, zvláštní soudní řízení a rodinné procesní přesahy.",
+      "allowed_for_final_conclusion": true,
+      "can_support_certain": true
+    },
+    {
+      "id": "T4",
+      "name": "prijmy_davky_rozpoctovy_kontext",
+      "mode": "conditional",
+      "purpose": "Životní minimum, dávky, bydlení, udržitelnost domácnosti a praktický dopad dluhů.",
+      "allowed_for_final_conclusion": false,
+      "can_support_certain": false
+    },
+    {
+      "id": "T5",
+      "name": "metodiky_formulare_portaly_tarify",
+      "mode": "conditional",
+      "purpose": "Formuláře, workflow, oficiální portály, metodiky a podpůrné výpočty.",
+      "allowed_for_final_conclusion": false,
+      "can_support_certain": false
+    }
+  ],
+  "sources": [
+    {
+      "id": "CZ-IZ-182-2006",
+      "nazev": "Insolvenční zákon",
+      "sbirka": "182/2006 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T1",
+      "priorita": 1,
+      "ucinnost_od": "2008-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "insolvence",
+        "oddluzeni",
+        "upadek",
+        "insolvencni_navrh",
+        "vztah_exekuce_a_insolvence"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 182/2006 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "insolvence",
+        "oddlužení",
+        "úpadek",
+        "splátkový kalendář",
+        "insolvenční návrh",
+        "zrušení oddlužení"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-OSR-99-1963",
+        "CZ-NV-595-2006"
+      ],
+      "notes_for_model": "Použij vždy u dotazů na oddlužení, úpadek, vstup do insolvence a vztah insolvence k exekucím.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2006-182"
+    },
+    {
+      "id": "CZ-OSR-99-1963",
+      "nazev": "Občanský soudní řád",
+      "sbirka": "99/1963 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T1",
+      "priorita": 1,
+      "ucinnost_od": "1963-12-04",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "vykon_rozhodnuti",
+        "proces",
+        "srazky_ze_mzdy",
+        "subsidiarni_rezim"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 99/1963 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "výkon rozhodnutí",
+        "srážky",
+        "řízení",
+        "usnesení",
+        "procesní postup"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-ER-120-2001",
+        "CZ-NV-595-2006"
+      ],
+      "notes_for_model": "Povinný procesní základ pro výkon rozhodnutí a návazné otázky.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/1963-99"
+    },
+    {
+      "id": "CZ-ER-120-2001",
+      "nazev": "Exekuční řád",
+      "sbirka": "120/2001 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T1",
+      "priorita": 1,
+      "ucinnost_od": "2001-05-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "exekuce",
+        "exekutor",
+        "naklady_exekuce",
+        "zastaveni_exekuce",
+        "odklad_exekuce",
+        "exekucni_prikaz"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 120/2001 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "exekuce",
+        "exekutor",
+        "odklad exekuce",
+        "zastavení exekuce",
+        "náklady exekuce",
+        "exekuční příkaz"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-OSR-99-1963",
+        "CZ-SOUBEZNE-VYKONY-119-2001"
+      ],
+      "notes_for_model": "Povinně použít u všech dotazů na soudní exekuci a postup exekutora.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2001-120"
+    },
+    {
+      "id": "CZ-SOUBEZNE-VYKONY-119-2001",
+      "nazev": "Zákon o souběžně probíhajících výkonech rozhodnutí",
+      "sbirka": "119/2001 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T1",
+      "priorita": 1,
+      "ucinnost_od": "2001-05-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "soubezne_vykony",
+        "poradi_pohledavek",
+        "kolize_vykonu",
+        "vice_exekuci"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 119/2001 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "pořadí pohledávek",
+        "více exekucí",
+        "souběh výkonů",
+        "kolize srážek"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-OSR-99-1963",
+        "CZ-ER-120-2001"
+      ],
+      "notes_for_model": "Aktivuj při souběhu více výkonů nebo exekucí a při otázkách pořadí uspokojování.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2001-119"
+    },
+    {
+      "id": "CZ-NV-595-2006",
+      "nazev": "Nařízení vlády o nezabavitelných částkách",
+      "sbirka": "595/2006 Sb.",
+      "typ": "narizeni_vlady",
+      "pravni_sila": "narizeni_vlady",
+      "tier": "T1",
+      "priorita": 1,
+      "ucinnost_od": "2007-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "nezabavitelna_castka",
+        "srazky_ze_mzdy",
+        "cisty_prijem",
+        "vyzivovane_osoby",
+        "prakticky_dopad"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} nařízení vlády č. 595/2006 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "nezabavitelná částka",
+        "kolik mi zůstane",
+        "srážky ze mzdy",
+        "čistá mzda",
+        "výpočet srážek"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-OSR-99-1963"
+      ],
+      "notes_for_model": "Použij u všech dotazů na výpočet srážek, vždy kontroluj účinné znění.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2006-595"
+    },
+    {
+      "id": "CZ-OZ-89-2012",
+      "nazev": "Občanský zákoník",
+      "sbirka": "89/2012 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T2",
+      "priorita": 2,
+      "ucinnost_od": "2014-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "zavazky",
+        "promlceni",
+        "uznani_dluhu",
+        "SJM",
+        "ruceni",
+        "spoludluznik",
+        "postoupeni_pohledavky"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 89/2012 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "smlouva",
+        "dluh",
+        "promlčení",
+        "uznání dluhu",
+        "ručitel",
+        "manželé",
+        "SJM",
+        "postoupení pohledávky"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [],
+      "notes_for_model": "Aktivuj při řešení vzniku a obsahu závazku a majetkových vztahů.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2012-89"
+    },
+    {
+      "id": "CZ-SU-257-2016",
+      "nazev": "Zákon o spotřebitelském úvěru",
+      "sbirka": "257/2016 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T2",
+      "priorita": 2,
+      "ucinnost_od": "2016-12-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "spotrebitelsky_uver",
+        "RPSN",
+        "uverova_smlouva",
+        "povinnosti_veritele",
+        "spotrebitel_vs_podnikatel"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 257/2016 Sb.",
+      "zdroj_domena": "cnb.cz",
+      "aktivacni_klice": [
+        "úvěr",
+        "půjčka",
+        "RPSN",
+        "kreditka",
+        "revolving",
+        "spotřebitelský úvěr",
+        "věřitel"
+      ],
+      "vylucovaci_klice": [
+        "čistě podnikatelský úvěr"
+      ],
+      "requires_cross_check_with": [
+        "CZ-OZ-89-2012"
+      ],
+      "notes_for_model": "Aktivuj, pokud je dlužník spotřebitel a otázka míří na úvěrovou smlouvu nebo povinnosti věřitele.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2016-257"
+    },
+    {
+      "id": "CZ-ZRS-292-2013",
+      "nazev": "Zákon o zvláštních řízeních soudních",
+      "sbirka": "292/2013 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T3",
+      "priorita": 3,
+      "ucinnost_od": "2014-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "vyzivne",
+        "nezletili",
+        "opatrovnictvi",
+        "zvlastni_rizeni"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 292/2013 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "výživné",
+        "nezletilé dítě",
+        "opatrovnictví",
+        "zvláštní řízení"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-OZ-89-2012"
+      ],
+      "notes_for_model": "Aktivuj při rodinných a statusových otázkách s dopadem do dluhové situace.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2013-292"
+    },
+    {
+      "id": "CZ-DR-280-2009",
+      "nazev": "Daňový řád",
+      "sbirka": "280/2009 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T3",
+      "priorita": 3,
+      "ucinnost_od": "2011-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "danovy_nedoplatek",
+        "danova_exekuce",
+        "verejnopravni_vymahani",
+        "spravce_dane"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": true,
+      "confidence_cap": "certain",
+      "citation_format": "§ {paragraf} zákona č. 280/2009 Sb.",
+      "zdroj_domena": "financnisprava.gov.cz",
+      "aktivacni_klice": [
+        "finanční úřad",
+        "daňový nedoplatek",
+        "daňová exekuce",
+        "celní dluh",
+        "správce daně"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-OSR-99-1963"
+      ],
+      "notes_for_model": "Aktivuj u veřejnoprávních dluhů a vymáhání správcem daně.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2009-280"
+    },
+    {
+      "id": "CZ-ZEM-110-2006",
+      "nazev": "Zákon o životním a existenčním minimu",
+      "sbirka": "110/2006 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T4",
+      "priorita": 4,
+      "ucinnost_od": "2007-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "zivotni_minimum",
+        "existencni_minimum",
+        "socialni_kontext",
+        "rozpoctovy_dopad"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "supported_but_conditional",
+      "citation_format": "§ {paragraf} zákona č. 110/2006 Sb.",
+      "zdroj_domena": "mpsv.cz",
+      "aktivacni_klice": [
+        "životní minimum",
+        "existenční minimum",
+        "nemám z čeho žít",
+        "přežití domácnosti"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-NV-595-2006"
+      ],
+      "notes_for_model": "Používej pro sociální a rozpočtový dopad, ne jako jedinou oporu exekučního závěru.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2006-110"
+    },
+    {
+      "id": "CZ-DSSP-151-2025",
+      "nazev": "Zákon o dávce státní sociální pomoci",
+      "sbirka": "151/2025 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T4",
+      "priorita": 4,
+      "ucinnost_od": "2025-10-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "davka_statni_socialni_pomoci",
+        "bydleni",
+        "socialni_podpora",
+        "prechodne_obdobi",
+        "rozpoctovy_dopad"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "supported_but_conditional",
+      "citation_format": "§ {paragraf} zákona č. 151/2025 Sb.",
+      "zdroj_domena": "mpsv.cz",
+      "aktivacni_klice": [
+        "superdávka",
+        "dávka státní sociální pomoci",
+        "bydlení",
+        "dávky",
+        "příspěvek po reformě"
+      ],
+      "vylucovaci_klice": [
+        "historický dotaz před 2025-10-01 bez přechodové relevance"
+      ],
+      "requires_cross_check_with": [
+        "CZ-ZEM-110-2006"
+      ],
+      "notes_for_model": "Aktivuj pro nový dávkový režim od 1. 10. 2025 a vždy rozlišuj přechodné období.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2025-151"
+    },
+    {
+      "id": "CZ-HIST-HN-111-2006",
+      "nazev": "Zákon o pomoci v hmotné nouzi",
+      "sbirka": "111/2006 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T4",
+      "priorita": 4,
+      "ucinnost_od": "2007-01-01",
+      "ucinnost_do": null,
+      "stav_zneni": "historicke_nebo_prehodne",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "hmotna_nouze",
+        "historicky_rezim",
+        "prechodne_obdobi"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": true,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "supported_but_conditional",
+      "citation_format": "§ {paragraf} zákona č. 111/2006 Sb.",
+      "zdroj_domena": "mpsv.cz",
+      "aktivacni_klice": [
+        "hmotná nouze",
+        "příspěvek na živobytí",
+        "doplatek na bydlení"
+      ],
+      "vylucovaci_klice": [
+        "nové žádosti po 2025-10-01, pokud nejde o přechodný nebo historický režim"
+      ],
+      "requires_cross_check_with": [
+        "CZ-DSSP-151-2025"
+      ],
+      "notes_for_model": "Používej jen při starších skutkových stavech nebo při vyhodnocení přechodného období.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2006-111"
+    },
+    {
+      "id": "CZ-HIST-SSP-117-1995",
+      "nazev": "Zákon o státní sociální podpoře",
+      "sbirka": "117/1995 Sb.",
+      "typ": "zakon",
+      "pravni_sila": "zakon",
+      "tier": "T4",
+      "priorita": 4,
+      "ucinnost_od": "1995-10-01",
+      "ucinnost_do": null,
+      "stav_zneni": "historicke_nebo_prehodne",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "statni_socialni_podpora",
+        "historicky_rezim",
+        "prechodne_obdobi"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": true,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "supported_but_conditional",
+      "citation_format": "§ {paragraf} zákona č. 117/1995 Sb.",
+      "zdroj_domena": "mpsv.cz",
+      "aktivacni_klice": [
+        "příspěvek na bydlení",
+        "státní sociální podpora",
+        "historické dávky"
+      ],
+      "vylucovaci_klice": [
+        "nové žádosti po 2025-10-01, pokud nejde o historický nebo přechodný režim"
+      ],
+      "requires_cross_check_with": [
+        "CZ-DSSP-151-2025"
+      ],
+      "notes_for_model": "Používej jen při starších skutkových stavech nebo při řešení přechodového režimu.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/1995-117"
+    },
+    {
+      "id": "CZ-VYHL-191-2017",
+      "nazev": "Vyhláška o náležitostech podání a formulářů elektronických podání v insolvenčním řízení",
+      "sbirka": "191/2017 Sb.",
+      "typ": "vyhlaska",
+      "pravni_sila": "vyhlaska",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": "2017-07-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "formular",
+        "insolvencni_podani",
+        "procesni_spravnost"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "supported_but_conditional",
+      "citation_format": "§ {paragraf} vyhlášky č. 191/2017 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "formulář",
+        "návrh na povolení oddlužení",
+        "insolvenční podání"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-IZ-182-2006"
+      ],
+      "notes_for_model": "Používej pro formulářovou a procesní správnost, ne jako samostatnou hmotněprávní oporu.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2017-191"
+    },
+    {
+      "id": "CZ-VYHL-NOVELA-254-2024",
+      "nazev": "Novela insolvenční formulářové vyhlášky",
+      "sbirka": "254/2024 Sb.",
+      "typ": "vyhlaska",
+      "pravni_sila": "vyhlaska",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": "2024-10-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platne_uplne_zneni",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "formular",
+        "oddluzeni_po_novele",
+        "procesni_spravnost"
+      ],
+      "je_zavazny": true,
+      "je_primarni_zdroj": true,
+      "je_oficialni_metodika": false,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "supported_but_conditional",
+      "citation_format": "vyhláška č. 254/2024 Sb.",
+      "zdroj_domena": "justice.cz",
+      "aktivacni_klice": [
+        "nové formuláře",
+        "oddlužení po novele",
+        "podání po 1.10.2024"
+      ],
+      "vylucovaci_klice": [
+        "historický skutkový stav před 2024-10-01"
+      ],
+      "requires_cross_check_with": [
+        "CZ-VYHL-191-2017",
+        "CZ-IZ-182-2006"
+      ],
+      "notes_for_model": "Aktivuj při formulářových dotazech po 1. 10. 2024.",
+      "source_url": "https://www.zakonyprolidi.cz/cs/2024-254"
+    },
+    {
+      "id": "CZ-MET-ODDLUZENI-SPLATKY",
+      "nazev": "Oficiální metodika výpočtu splátek v oddlužení",
+      "sbirka": null,
+      "typ": "metodika",
+      "pravni_sila": "oficialni_metodika",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": "2024-10-01",
+      "ucinnost_do": null,
+      "stav_zneni": "platna_metodika",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "oddluzeni",
+        "vypocet_splatek",
+        "orientacni_vysvetleni"
+      ],
+      "je_zavazny": false,
+      "je_primarni_zdroj": false,
+      "je_oficialni_metodika": true,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "informational_only",
+      "citation_format": "Oficiální metodika Ministerstva spravedlnosti",
+      "zdroj_domena": "insolvence.justice.cz",
+      "aktivacni_klice": [
+        "výpočet splátky",
+        "kolik budu platit v oddlužení",
+        "metodika splátek"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-IZ-182-2006",
+        "CZ-NV-595-2006"
+      ],
+      "notes_for_model": "Může vysvětlit postup a orientační výpočet, ale nesmí sama vytvořit jistý právní závěr.",
+      "source_url": "https://insolvence.justice.cz/wp-content/uploads/2025/01/Metodika_vypoctu_splatek_od_2025.docx"
+    },
+    {
+      "id": "CZ-PORTAL-EXEKUCE-JUSTICE",
+      "nazev": "Portál exekuce.justice.cz",
+      "sbirka": null,
+      "typ": "portal_info",
+      "pravni_sila": "portal_info",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": null,
+      "ucinnost_do": null,
+      "stav_zneni": "aktualni_portal_info",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "exekuce",
+        "srazky",
+        "workflow",
+        "vysvetlujici_obsah",
+        "kalkulacka_srazek"
+      ],
+      "je_zavazny": false,
+      "je_primarni_zdroj": false,
+      "je_oficialni_metodika": true,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "informational_only",
+      "citation_format": "Oficiální portál exekuce.justice.cz",
+      "zdroj_domena": "exekuce.justice.cz",
+      "aktivacni_klice": [
+        "jak postupovat",
+        "co dělat při exekuci",
+        "vysvětlení exekuce",
+        "chráněný účet"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-ER-120-2001",
+        "CZ-OSR-99-1963"
+      ],
+      "notes_for_model": "Používej pro vysvětlení postupu a orientaci uživatele.",
+      "source_url": "https://exekuce.justice.cz/"
+    },
+    {
+      "id": "CZ-PORTAL-INSOLVENCE-JUSTICE",
+      "nazev": "Portál insolvence.justice.cz",
+      "sbirka": null,
+      "typ": "portal_info",
+      "pravni_sila": "portal_info",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": null,
+      "ucinnost_do": null,
+      "stav_zneni": "aktualni_portal_info",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "insolvence",
+        "oddluzeni",
+        "formulare",
+        "workflow",
+        "kalkulator_splatek"
+      ],
+      "je_zavazny": false,
+      "je_primarni_zdroj": false,
+      "je_oficialni_metodika": true,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "informational_only",
+      "citation_format": "Oficiální portál insolvence.justice.cz",
+      "zdroj_domena": "insolvence.justice.cz",
+      "aktivacni_klice": [
+        "jak podat oddlužení",
+        "insolvenční formulář",
+        "kalkulátor splátek",
+        "průvodce oddlužením"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-IZ-182-2006",
+        "CZ-VYHL-191-2017"
+      ],
+      "notes_for_model": "Používej pro workflow, formuláře a orientační nástroje.",
+      "source_url": "https://insolvence.justice.cz/"
+    },
+    {
+      "id": "CZ-PORTAL-MPSV",
+      "nazev": "Portál MPSV",
+      "sbirka": null,
+      "typ": "portal_info",
+      "pravni_sila": "portal_info",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": null,
+      "ucinnost_do": null,
+      "stav_zneni": "aktualni_portal_info",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "davky",
+        "socialni_pomoc",
+        "bydleni",
+        "zivotni_minimum",
+        "prechodne_obdobi"
+      ],
+      "je_zavazny": false,
+      "je_primarni_zdroj": false,
+      "je_oficialni_metodika": true,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "informational_only",
+      "citation_format": "Oficiální portál MPSV",
+      "zdroj_domena": "mpsv.cz",
+      "aktivacni_klice": [
+        "dávky",
+        "bydlení",
+        "hmotná nouze",
+        "životní minimum",
+        "superdávka"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-DSSP-151-2025",
+        "CZ-ZEM-110-2006"
+      ],
+      "notes_for_model": "Používej pro orientaci v dávkách, podmínkách a přechodných režimech.",
+      "source_url": "https://www.mpsv.cz/"
+    },
+    {
+      "id": "CZ-PORTAL-CNB",
+      "nazev": "Portál ČNB ke spotřebitelskému úvěru",
+      "sbirka": null,
+      "typ": "portal_info",
+      "pravni_sila": "portal_info",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": null,
+      "ucinnost_do": null,
+      "stav_zneni": "aktualni_portal_info",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "spotrebitelsky_uver",
+        "ochrana_spotrebitele",
+        "stanoviska"
+      ],
+      "je_zavazny": false,
+      "je_primarni_zdroj": false,
+      "je_oficialni_metodika": true,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "informational_only",
+      "citation_format": "Oficiální portál ČNB",
+      "zdroj_domena": "cnb.cz",
+      "aktivacni_klice": [
+        "spotřebitelský úvěr",
+        "ochrana spotřebitele",
+        "věřitel",
+        "stanovisko ČNB"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-SU-257-2016"
+      ],
+      "notes_for_model": "Používej jako podpůrný oficiální výkladový zdroj.",
+      "source_url": "https://www.cnb.cz/cs/dohled-financni-trh/legislativni-zakladna/ochrana-spotrebitele-a-spotrebitelsky-uver/pravni-predpisy/"
+    },
+    {
+      "id": "CZ-PORTAL-FS",
+      "nazev": "Portál Finanční správy k vymáhání daní",
+      "sbirka": null,
+      "typ": "portal_info",
+      "pravni_sila": "portal_info",
+      "tier": "T5",
+      "priorita": 5,
+      "ucinnost_od": null,
+      "ucinnost_do": null,
+      "stav_zneni": "aktualni_portal_info",
+      "verze_predpisu": "snapshot_2026-04-03",
+      "obsahuje_novely_do_data": "2026-04-03",
+      "oblasti": [
+        "danova_exekuce",
+        "verejnopravni_vymahani",
+        "workflow"
+      ],
+      "je_zavazny": false,
+      "je_primarni_zdroj": false,
+      "je_oficialni_metodika": true,
+      "je_historicky_zdroj": false,
+      "allowed_for_final_conclusion": false,
+      "confidence_cap": "informational_only",
+      "citation_format": "Oficiální portál Finanční správy",
+      "zdroj_domena": "financnisprava.gov.cz",
+      "aktivacni_klice": [
+        "daňová exekuce",
+        "vymáhání daní",
+        "správce daně",
+        "nedoplatek"
+      ],
+      "vylucovaci_klice": [],
+      "requires_cross_check_with": [
+        "CZ-DR-280-2009"
+      ],
+      "notes_for_model": "Používej pro veřejnoprávní workflow a základní procesní orientaci.",
+      "source_url": "https://financnisprava.gov.cz/cs/dane/danovy-system-cr/postup-v-danovem-rizeni/vymahani"
+    }
+  ],
+  "source_sets": {
+    "always_on_source_ids": [
+      "CZ-IZ-182-2006",
+      "CZ-OSR-99-1963",
+      "CZ-ER-120-2001",
+      "CZ-SOUBEZNE-VYKONY-119-2001",
+      "CZ-NV-595-2006"
+    ],
+    "conditional_source_groups": [
+      {
+        "group_id": "private_law_core",
+        "source_ids": [
+          "CZ-OZ-89-2012",
+          "CZ-SU-257-2016"
+        ]
+      },
+      {
+        "group_id": "public_law_and_special_procedure",
+        "source_ids": [
+          "CZ-ZRS-292-2013",
+          "CZ-DR-280-2009"
+        ]
+      },
+      {
+        "group_id": "social_budget_context",
+        "source_ids": [
+          "CZ-ZEM-110-2006",
+          "CZ-DSSP-151-2025",
+          "CZ-HIST-HN-111-2006",
+          "CZ-HIST-SSP-117-1995"
+        ]
+      },
+      {
+        "group_id": "advisory_workflow",
+        "source_ids": [
+          "CZ-VYHL-191-2017",
+          "CZ-VYHL-NOVELA-254-2024",
+          "CZ-MET-ODDLUZENI-SPLATKY",
+          "CZ-PORTAL-EXEKUCE-JUSTICE",
+          "CZ-PORTAL-INSOLVENCE-JUSTICE",
+          "CZ-PORTAL-MPSV",
+          "CZ-PORTAL-CNB",
+          "CZ-PORTAL-FS"
+        ]
+      }
+    ]
+  },
+  "query_classification": {
+    "domains": [
+      {
+        "id": "exekuce",
+        "keywords": [
+          "exekuce",
+          "exekutor",
+          "exekuční příkaz",
+          "odklad exekuce",
+          "zastavení exekuce",
+          "chráněný účet"
+        ]
+      },
+      {
+        "id": "srazky",
+        "keywords": [
+          "srážky ze mzdy",
+          "nezabavitelná částka",
+          "kolik mi zůstane",
+          "čistá mzda",
+          "výpočet srážek"
+        ]
+      },
+      {
+        "id": "oddluzeni",
+        "keywords": [
+          "oddlužení",
+          "insolvence",
+          "úpadek",
+          "splátkový kalendář",
+          "insolvenční návrh"
+        ]
+      },
+      {
+        "id": "vznik_dluhu",
+        "keywords": [
+          "smlouva",
+          "promlčení",
+          "uznání dluhu",
+          "ručitel",
+          "spoludlužník",
+          "postoupení pohledávky"
+        ]
+      },
+      {
+        "id": "spotrebitelsky_uver",
+        "keywords": [
+          "úvěr",
+          "půjčka",
+          "RPSN",
+          "kreditka",
+          "revolving",
+          "spotřebitelský úvěr"
+        ]
+      },
+      {
+        "id": "verejnopravni_dluh",
+        "keywords": [
+          "finanční úřad",
+          "daňový nedoplatek",
+          "daňová exekuce",
+          "OSSZ",
+          "VZP",
+          "penále"
+        ]
+      },
+      {
+        "id": "rodinne_prekryvy",
+        "keywords": [
+          "SJM",
+          "manžel",
+          "manželka",
+          "výživné",
+          "nezletilé dítě",
+          "společné jmění"
+        ]
+      },
+      {
+        "id": "socialni_dopad",
+        "keywords": [
+          "dávky",
+          "superdávka",
+          "hmotná nouze",
+          "bydlení",
+          "nemám z čeho žít",
+          "životní minimum"
+        ]
+      }
+    ]
+  },
+  "activation_rules": [
+    {
+      "id": "R-A-basic-debt",
+      "name": "zakladni_orientacni_dotaz",
+      "triggers_any": [
+        "mám dluhy",
+        "co mám dělat s dluhy",
+        "přišla mi exekuce",
+        "mám jít do oddlužení"
+      ],
+      "activate_tiers": [
+        "T1"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T4",
+          "if_any": [
+            "příjem",
+            "bydlení",
+            "děti",
+            "domácnost",
+            "dávky"
+          ]
+        },
+        {
+          "tier": "T5",
+          "if_any": [
+            "jak postupovat",
+            "kam podat",
+            "formulář",
+            "výpočet"
+          ]
+        }
+      ],
+      "certainty_cap_without_more_facts": "supported_but_conditional"
+    },
+    {
+      "id": "R-B-execution",
+      "name": "exekuce_a_srazky",
+      "triggers_any": [
+        "exekuce",
+        "exekutor",
+        "srážky ze mzdy",
+        "nezabavitelná částka",
+        "chráněný účet",
+        "odklad exekuce",
+        "zastavení exekuce",
+        "náklady exekuce"
+      ],
+      "activate_tiers": [
+        "T1"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T4",
+          "if_any": [
+            "nemám z čeho žít",
+            "děti",
+            "nájem",
+            "bydlení",
+            "dávky"
+          ]
+        },
+        {
+          "tier": "T5",
+          "if_any": [
+            "jak postupovat",
+            "výpočet",
+            "vysvětlení"
+          ]
+        }
+      ],
+      "mandatory_checks": [
+        "effective_text_verified_if_numerical_or_procedural_claim"
+      ],
+      "certainty_rule": "Certain jen při dostatečném skutkovém stavu a ověření účinného znění."
+    },
+    {
+      "id": "R-C-insolvency",
+      "name": "oddluzeni_a_insolvence",
+      "triggers_any": [
+        "oddlužení",
+        "insolvence",
+        "úpadek",
+        "insolvenční návrh",
+        "splátkový kalendář",
+        "zpráva pro oddlužení"
+      ],
+      "activate_tiers": [
+        "T1",
+        "T5"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T4",
+          "if_any": [
+            "náklady domácnosti",
+            "bydlení",
+            "příjem",
+            "dávky",
+            "děti"
+          ]
+        }
+      ],
+      "mandatory_temporal_checks": [
+        "insolvency_reform_2024"
+      ]
+    },
+    {
+      "id": "R-D-substantive-debt",
+      "name": "vznik_dluhu_a_hmotne_pravo",
+      "triggers_any": [
+        "smlouva je neplatná",
+        "promlčení",
+        "uznání dluhu",
+        "ručitel",
+        "spoludlužník",
+        "RPSN",
+        "postoupení pohledávky"
+      ],
+      "activate_tiers": [
+        "T1",
+        "T2"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T5",
+          "if_any": [
+            "obecné vysvětlení",
+            "shrnutí postupu"
+          ]
+        }
+      ],
+      "certainty_cap_without_primary_support": "supported_but_conditional"
+    },
+    {
+      "id": "R-E-public-law-debt",
+      "name": "verejnopravni_dluh",
+      "triggers_any": [
+        "finanční úřad",
+        "daňový nedoplatek",
+        "daňová exekuce",
+        "OSSZ",
+        "VZP",
+        "penále",
+        "správní vymáhání"
+      ],
+      "activate_tiers": [
+        "T1",
+        "T3"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T4",
+          "if_any": [
+            "bydlení",
+            "nemám z čeho žít",
+            "dávky"
+          ]
+        }
+      ],
+      "certainty_cap_without_more_facts": "supported_but_conditional"
+    },
+    {
+      "id": "R-F-family-overlap",
+      "name": "rodina_SJM_vyzivne",
+      "triggers_any": [
+        "dluh manžela",
+        "společné jmění",
+        "SJM",
+        "výživné",
+        "dluhy v manželství",
+        "nezletilé dítě"
+      ],
+      "activate_tiers": [
+        "T1",
+        "T2"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T3",
+          "if_any": [
+            "výživné",
+            "nezletilé dítě",
+            "opatrovnictví"
+          ]
+        },
+        {
+          "tier": "T4",
+          "if_any": [
+            "domácnost",
+            "děti",
+            "bydlení",
+            "nemám z čeho žít"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "R-G-social-impact",
+      "name": "davky_a_rozpoctovy_dopad",
+      "triggers_any": [
+        "dávky",
+        "superdávka",
+        "hmotná nouze",
+        "příspěvek na bydlení",
+        "nemám z čeho žít",
+        "jak vyjdu"
+      ],
+      "activate_tiers": [
+        "T1",
+        "T4"
+      ],
+      "activate_optional_tiers": [
+        {
+          "tier": "T5",
+          "if_any": [
+            "jak požádat",
+            "podání",
+            "postup"
+          ]
+        }
+      ],
+      "mandatory_temporal_checks": [
+        "social_reform_2025"
+      ],
+      "transition_period_checks": [
+        "social_transition_2025_2026"
+      ],
+      "certainty_cap": "supported_but_conditional"
+    }
+  ],
+  "denylist": {
+    "categories": [
+      {
+        "id": "unofficial_blogs",
+        "description": "Blogy, diskuse a neoficiální shrnutí bez primární citace.",
+        "allowed_for_final_conclusion": false
+      },
+      {
+        "id": "ai_aggregates",
+        "description": "AI agregáty a shrnovače bez ověřitelného právního základu.",
+        "allowed_for_final_conclusion": false
+      },
+      {
+        "id": "commercial_articles_without_effective_date",
+        "description": "Komerční články bez uvedení účinnosti a verze znění.",
+        "allowed_for_final_conclusion": false
+      },
+      {
+        "id": "unofficial_calculators",
+        "description": "Kalkulačky bez jasného uvedení právního základu.",
+        "allowed_for_final_conclusion": false
+      },
+      {
+        "id": "secondary_summaries_as_primary",
+        "description": "Sekundární shrnutí použité místo zákona, pokud je zákon dostupný.",
+        "allowed_for_final_conclusion": false
+      },
+      {
+        "id": "case_law_without_context",
+        "description": "Judikatura bez kontroly aktuálnosti a skutkového kontextu.",
+        "allowed_for_final_conclusion": false
+      }
+    ],
+    "hard_rules": [
+      {
+        "id": "D1",
+        "rule": "Neuváděj sekundární článek jako hlavní právní oporu, pokud je dostupný primární předpis."
+      },
+      {
+        "id": "D2",
+        "rule": "Nepřebírej číselný výpočet z neoficiální kalkulačky."
+      },
+      {
+        "id": "D3",
+        "rule": "Nezakládej certain pouze na metodice, portálu nebo kalkulátoru."
+      },
+      {
+        "id": "D4",
+        "rule": "Ignoruj zdroj, pokud neobsahuje datum účinnosti nebo není možné určit verzi znění."
+      },
+      {
+        "id": "D5",
+        "rule": "Nepoužívej historické znění předpisu bez explicitního důvodu a časového ukotvení."
+      }
+    ]
+  },
+  "orchestration": {
+    "pipeline_steps": [
+      {
+        "step": 1,
+        "id": "classify_query",
+        "description": "Klasifikuj dotaz do domén: exekuce, srážky, oddlužení, vznik dluhu, spotřebitelský úvěr, veřejnoprávní dluh, rodinný přesah, sociální dopad."
+      },
+      {
+        "step": 2,
+        "id": "activate_t1",
+        "description": "Vždy aktivuj T1."
+      },
+      {
+        "step": 3,
+        "id": "activate_conditional_tiers",
+        "description": "Podle domény a triggerů aktivuj T2, T3, T4 a T5."
+      },
+      {
+        "step": 4,
+        "id": "apply_temporal_gate",
+        "description": "Ověř účinnost předpisů a přechodná období u citlivých oblastí."
+      },
+      {
+        "step": 5,
+        "id": "apply_denylist",
+        "description": "Odstraň neoficiální nebo nepřípustné zdroje."
+      },
+      {
+        "step": 6,
+        "id": "score_support",
+        "description": "Vyhodnoť sílu právní opory a dostatečnost skutkových informací."
+      },
+      {
+        "step": 7,
+        "id": "set_confidence_cap",
+        "description": "Nastav maximální možnou jistotu závěru."
+      },
+      {
+        "step": 8,
+        "id": "compose_answer",
+        "description": "Sestav odpověď v pořadí: závěr, právní opora, praktický dopad, limity a podmínky."
+      }
+    ],
+    "mixed_query_handling": {
+      "enabled": true,
+      "rule": "Pokud dotaz kombinuje více oblastí, aktivuj více větví a rozděl odpověď po blocích podle témat."
+    },
+    "missing_information_policy": {
+      "enabled": true,
+      "rule": "Pokud chybí rozhodující skutečnost, odpověď nesmí být certain a musí výslovně uvést, co výsledek podmiňuje."
+    }
+  },
+  "response_policy": {
+    "default_structure": [
+      "stručný závěr",
+      "právní opora",
+      "praktický dopad",
+      "podmínky nebo limity"
+    ],
+    "required_disclaimers": [
+      {
+        "when": "certainty != certain",
+        "text": "Závěr je orientační nebo podmíněný konkrétními okolnostmi případu."
+      },
+      {
+        "when": "only_advisory_sources_present == true",
+        "text": "Jde o vysvětlující nebo metodický zdroj, nikoli samostatnou závaznou právní oporu."
+      }
+    ],
+    "numerical_output_rules": [
+      {
+        "id": "numerical_requires_effective_text",
+        "rule": "Jakýkoli výpočet srážek, splátek nebo dávek musí být navázán na účinné znění a správné datum."
+      },
+      {
+        "id": "numerical_requires_inputs",
+        "rule": "Pokud chybí vstupy pro výpočet, výsledek smí být jen orientační."
+      }
+    ]
+  },
+  "developer_notes": {
+    "intended_usage": [
+      "backend konfigurace",
+      "RAG filtering",
+      "prompt orchestration",
+      "confidence scoring",
+      "policy enforcement"
+    ],
+    "recommended_extensions": [
+      "doplnit přesné URL primárních zdrojů",
+      "doplnit interní snapshot_id pro každé znění",
+      "doplnit parser paragrafových citací",
+      "doplnit classifier thresholdy",
+      "doplnit audit log pro použitá pravidla"
+    ],
+    "known_limitations": [
+      "JSON neobsahuje úplné texty předpisů",
+      "historické znění je třeba verzovat zvlášť",
+      "čistě skutkové spory nelze vyřešit jen konfigurací zdrojů"
+    ]
+  }
+}

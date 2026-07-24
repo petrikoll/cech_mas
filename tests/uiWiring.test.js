@@ -235,6 +235,21 @@ test('tvorba dokumentů je samostatný list s plně integrovanou původní aplik
   assert.match(documentCreatorClient, /fetch\('\/document-creator\/api\/contacts'\)/);
 });
 
+test('E.L.A.I. právní poradce je samostatný list s původním whitelistem a API', () => {
+  const serverSource = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const helperService = readFileSync(new URL('../elaiHelperService.js', import.meta.url), 'utf8');
+  const helperClient = readFileSync(new URL('../elai-helper/elai-legal.js', import.meta.url), 'utf8');
+  assert.match(configSource, /id: 'elai-helper', name: 'E\.L\.A\.I\. poradce'/);
+  assert.match(appSource, /const ELAI_HELPER_URL = '\/elai-helper\/'/);
+  assert.match(appSource, /mainView === 'elai-helper'/);
+  assert.match(appSource, /src=\{ELAI_HELPER_URL\}/);
+  assert.match(serverSource, /handleElaiLegalRequest\(request, response\)/);
+  assert.match(helperService, /gemini-2\.5-flash/);
+  assert.match(helperService, /Citace neodpovidaji vybranym whitelist zdrojum/);
+  assert.match(helperClient, /const LEGAL_ENDPOINT = "\/elai-helper\/api\/legal-query"/);
+  assert.match(helperClient, /\/elai-helper\/data\/whitelist-merged\.json/);
+});
+
 test('ISIR zachovává původní práci s PDF bez ručního importu klientů v rozhraní', () => {
   const isirViewSource = readFileSync(
     new URL('../src/app/IsirView.jsx', import.meta.url),

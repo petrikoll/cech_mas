@@ -1,4 +1,4 @@
-import { BarChart3, Calculator, FileText, GraduationCap, Network, Scale, Sparkles, Target, Users, Workflow } from 'lucide-react';
+import { BarChart3, BookOpen, Calculator, FileText, GraduationCap, Network, Scale, Sparkles, Target, Users, Workflow } from 'lucide-react';
 
 function todayIso() {
   const now = new Date();
@@ -196,6 +196,7 @@ const APP_VIEWS = [
   { id: 'isir', name: 'ISIR', icon: Scale, tone: 'sky' },
   { id: 'calculator', name: 'Kalkula\u010dka', icon: Calculator, tone: 'amber' },
   { id: 'document-creator', name: 'Tvorba dokument\u016f', icon: FileText, tone: 'indigo' },
+  { id: 'elai-helper', name: 'E.L.A.I. poradce', icon: BookOpen, tone: 'cyan' },
   { id: 'ai-tools', name: 'AI Pom\u016fcky', icon: Sparkles, tone: 'violet' },
 ];
 
