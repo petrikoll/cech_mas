@@ -12,10 +12,8 @@ CECH/MAS.
 
 ## Stav
 
-Jde o přípravnou implementační větev. Rozhraní a konfigurace projektů jsou
-založené, ale aplikace zatím není určena pro produkční zápis osobních údajů.
-Google Apps Script backend musí před nasazením implementovat stejnou kontrolu
-`project_id` jako frontend.
+Aplikace je produkčně nasazená pro projekty CECH a MAS. Google Apps Script
+vynucuje `project_id`, uživatelská oprávnění, audit a ochranu proti duplicitám.
 
 ## Lokální spuštění
 
@@ -71,4 +69,12 @@ Přípravný dvouprojektový backend je v adresáři
 - uživatelská oprávnění, audit a ochranu proti dvojímu odeslání,
 - bridge pro souběžný provoz starých XLSM a nové aplikace.
 
-Backend zatím není nasazený a živé Google Sheety nebyly upraveny.
+Backend je nasazený do samostatného Google Apps Script projektu.
+
+## ISIR
+
+Horní list `ISIR` provádí kontrolu po jednom klientovi přímo ze serveru
+aplikace. Ukládá výsledek ověření, nalezená řízení a metadata PDF dokumentů do
+datových listů `InsolvencyVerifications`, `InsolvencyCases` a
+`InsolvencyDocuments`. Vybrané PDF lze archivovat do podsložky `ISIR` v
+klientské složce na Google Disku. Zdrojový odkaz zůstává vždy zachovaný.

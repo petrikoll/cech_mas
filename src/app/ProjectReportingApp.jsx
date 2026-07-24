@@ -138,6 +138,7 @@ import {
 const Ka01View = React.lazy(() => import('./Ka01View.jsx'));
 const Ka2CaseManagementView = React.lazy(() => import('./Ka2CaseManagementView.jsx'));
 const ReportingView = React.lazy(() => import('./ReportingView.jsx'));
+const IsirView = React.lazy(() => import('./IsirView.jsx'));
 
 const PROJECT_BACKGROUND_IMAGES = Object.freeze({
   CECH: cechBackgroundImage,
@@ -1288,6 +1289,12 @@ const VIEW_THEMES = {
     accent: 'bg-slate-100/35',
     label: 'text-slate-600'
   },
+  isir: {
+    page: 'bg-[radial-gradient(circle_at_top_left,#f0f9ff_0,#f8fcff_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-sky-100/80 bg-white/90',
+    accent: 'bg-sky-100/25',
+    label: 'text-sky-700'
+  },
   'ai-tools': {
     page: 'bg-[radial-gradient(circle_at_top_left,#f5f3ff_0,#fbfaff_34%,#fbfdff_68%,#ffffff_100%)]',
     header: 'border-violet-100/80 bg-white/90',
@@ -1320,6 +1327,10 @@ const NAV_THEMES = {
   dashboard: {
     active: 'border-slate-200 bg-white text-slate-900 shadow-[0_8px_18px_-14px_rgba(15,23,42,0.6)] ring-1 ring-slate-100',
     idle: 'border-transparent bg-transparent text-slate-500 hover:border-slate-100 hover:bg-white hover:text-slate-800'
+  },
+  isir: {
+    active: 'border-sky-200 bg-sky-50 text-sky-800 shadow-[0_8px_18px_-14px_rgba(2,132,199,0.7)] ring-1 ring-sky-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-sky-100 hover:bg-sky-50/70 hover:text-sky-800'
   },
   'ai-tools': {
     active: 'border-violet-200 bg-violet-50 text-violet-800 shadow-[0_8px_18px_-14px_rgba(124,58,237,0.7)] ring-1 ring-violet-100',
@@ -2243,6 +2254,9 @@ function App() {
   const [isVerifyingInsolvency, setIsVerifyingInsolvency] = useState(false);
   const [isVerifyingProjectInsolvencies, setIsVerifyingProjectInsolvencies] = useState(false);
   const [projectInsolvencyNotice, setProjectInsolvencyNotice] = useState('');
+  const [insolvencyVerifications, setInsolvencyVerifications] = useState([]);
+  const [insolvencyCases, setInsolvencyCases] = useState([]);
+  const [insolvencyDocuments, setInsolvencyDocuments] = useState([]);
   const [statusMessage, setStatusMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [clientCaseSummary, setClientCaseSummary] = useState('');
@@ -2622,7 +2636,7 @@ function App() {
 
     const fetchSheetRecords = async () => {
       try {
-        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics, insolvencyVerifications] = await Promise.all([
+        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics, insolvencyVerificationsResult, insolvencyCasesResult, insolvencyDocumentsResult] = await Promise.all([
           fetchAction('listIndividualPlans'),
           fetchAction('listPerformances'),
           fetchAction('listMeetings'),
@@ -2647,10 +2661,21 @@ function App() {
           fetchAction('listInsolvencyVerifications').catch((error) => {
             console.warn('ISIR verifications load skipped:', error);
             return { insolvencyVerifications: [] };
+          }),
+          fetchAction('listInsolvencyCases').catch((error) => {
+            console.warn('ISIR cases load skipped:', error);
+            return { insolvencyCases: [] };
+          }),
+          fetchAction('listInsolvencyDocuments').catch((error) => {
+            console.warn('ISIR documents load skipped:', error);
+            return { insolvencyDocuments: [] };
           })
         ]);
         if (cancelled) return;
         setStatisticsRows(statistics.statistics || []);
+        setInsolvencyVerifications(insolvencyVerificationsResult.insolvencyVerifications || []);
+        setInsolvencyCases(insolvencyCasesResult.insolvencyCases || []);
+        setInsolvencyDocuments(insolvencyDocumentsResult.insolvencyDocuments || []);
         const remoteRecords = mapSheetRecordsToAppRecords({
           individualPlans: plans.individualPlans || [],
           performances: performances.performances || [],
@@ -2660,7 +2685,7 @@ function App() {
           education: education.education || education.educations || education.vzdelavani || [],
           supervision: supervision.supervision || supervision.supervisions || supervision.supervize || [],
           paymentPlans: paymentPlans.paymentPlans || [],
-          insolvencyVerifications: insolvencyVerifications.insolvencyVerifications || []
+          insolvencyVerifications: insolvencyVerificationsResult.insolvencyVerifications || []
         }, clientIndex).map((record) => ({
           ...record,
           projectId: activeProjectId,
@@ -4496,18 +4521,15 @@ function App() {
     }
   };
 
-  const verifySelectedClientInsolvency = async () => {
-    if (!selectedClient || isVerifyingInsolvency) return;
-    setIsVerifyingInsolvency(true);
-    try {
-      const result = await postGoogleSheetAction({
-        action: 'verifyClientInsolvency',
-        client_id: selectedClient.id
-      });
-      const row = result?.insolvencyVerification;
-      if (!row) throw new Error('ISIR nevrátil výsledek ověření.');
+  const mergeIsirSnapshot = (snapshot) => {
+    const verification = snapshot?.verification;
+    if (verification?.client_id) {
+      setInsolvencyVerifications((previous) => [
+        verification,
+        ...previous.filter((item) => item.client_id !== verification.client_id)
+      ]);
       const [record] = mapSheetRecordsToAppRecords({
-        insolvencyVerifications: [row]
+        insolvencyVerifications: [verification]
       }, clientIndex);
       if (record) {
         setRecords((previous) => [
@@ -4515,91 +4537,150 @@ function App() {
           ...previous.filter((item) => item.id !== record.id)
         ].sort(compareTimelineRecordsDesc));
       }
-      setFlash(
-        /^(ano|true|1)$/i.test(String(row.matched || ''))
-          ? `ISIR ověřen: insolvence od ${formatDateLabel(row.insolvency_date)}.`
-          : 'ISIR ověřen: klient nemá započitatelný vstup do insolvence od 1. 3. 2026.'
-      );
+    }
+    if (Array.isArray(snapshot?.cases)) {
+      const incomingIds = new Set(snapshot.cases.map((item) => item.case_id));
+      setInsolvencyCases((previous) => [
+        ...snapshot.cases,
+        ...previous.filter((item) => !incomingIds.has(item.case_id))
+      ]);
+    }
+    if (Array.isArray(snapshot?.documents)) {
+      const incomingIds = new Set(snapshot.documents.map((item) => item.document_id));
+      setInsolvencyDocuments((previous) => [
+        ...snapshot.documents,
+        ...previous.filter((item) => !incomingIds.has(item.document_id))
+      ]);
+    }
+  };
+
+  const checkClientInIsir = async (client) => {
+    const response = await fetch('/api/isir', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'checkClient',
+        client: {
+          id: client.id,
+          number: client.clientNumber,
+          projectId: client.projectId,
+          firstName: client.jmeno,
+          lastName: client.prijmeni,
+          birthDate: client.datumNarozeni
+        }
+      })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false || !result.snapshot) {
+      throw new Error(result.error || `ISIR kontrola selhala: ${response.status}`);
+    }
+    const stored = await postGoogleSheetAction({
+      action: 'saveInsolvencySnapshot',
+      snapshot: result.snapshot
+    });
+    const snapshot = stored?.snapshot || result.snapshot;
+    mergeIsirSnapshot(snapshot);
+    return snapshot;
+  };
+
+  const verifyClientFromIsirView = async (client, options = {}) => {
+    if (!client || isVerifyingInsolvency || isVerifyingProjectInsolvencies) return null;
+    setIsVerifyingInsolvency(true);
+    setProjectInsolvencyNotice(`ISIR: kontroluji klienta ID ${client.clientNumber || '—'}…`);
+    try {
+      const snapshot = await checkClientInIsir(client);
+      const verification = snapshot.verification;
+      const matched = /^(ano|true|1)$/i.test(String(verification?.matched || ''));
+      const message = matched
+        ? `ISIR ověřen: nalezeno řízení od ${formatDateLabel(verification.insolvency_date)}.`
+        : 'ISIR ověřen: bez započitatelného vstupu do insolvence od 1. 3. 2026.';
+      setProjectInsolvencyNotice(message);
+      if (!options.silent) setFlash(message);
+      return snapshot;
     } catch (error) {
       console.error('ISIR verification failed:', error);
-      setFlash(saveErrorMessage('Ověření v ISIR se nezdařilo', error));
+      const message = saveErrorMessage('Ověření v ISIR se nezdařilo', error);
+      setProjectInsolvencyNotice(message);
+      if (!options.silent) setFlash(message);
+      throw error;
     } finally {
       setIsVerifyingInsolvency(false);
     }
   };
 
-  const verifyProjectInsolvencies = async () => {
-    if (isVerifyingProjectInsolvencies) return;
-    setIsVerifyingProjectInsolvencies(true);
-    setProjectInsolvencyNotice(`Připravuji hromadnou kontrolu klientů projektu ${activeProjectId}…`);
+  const verifySelectedClientInsolvency = async () => {
+    if (!selectedClient) return;
     try {
-      let offset = 0;
-      let totalChecked = 0;
-      let totalMatched = 0;
-      let totalFailed = 0;
-      let missingIdentity = 0;
-      let totalEligible = 0;
-      const receivedRows = [];
+      await verifyClientFromIsirView(selectedClient);
+    } catch {
+      // Chybové hlášení nastavuje společná kontrolní funkce.
+    }
+  };
 
-      for (let batchNumber = 0; batchNumber < 20; batchNumber += 1) {
+  const verifyProjectInsolvencies = async () => {
+    if (isVerifyingProjectInsolvencies || isVerifyingInsolvency) return;
+    const eligibleClients = projectClients.filter(
+      (client) => client.id && client.jmeno && client.prijmeni && client.datumNarozeni
+    );
+    const missingIdentity = projectClients.length - eligibleClients.length;
+    const delayMs = 2500;
+    let successful = 0;
+    let matched = 0;
+    let failed = 0;
+    let lastFailure = '';
+
+    setIsVerifyingProjectInsolvencies(true);
+    try {
+      for (let index = 0; index < eligibleClients.length; index += 1) {
+        const client = eligibleClients[index];
         setProjectInsolvencyNotice(
-          `ISIR: zpracovávám dávku ${batchNumber + 1} · dosud ověřeno ${totalChecked}${totalEligible ? ` z ${totalEligible}` : ''} klientů…`
+          `ISIR: klient ${index + 1} z ${eligibleClients.length} · ID ${client.clientNumber || '—'} · ${client.fullName} · úspěšně ${successful} · chyby ${failed}`
         );
-        const result = await postGoogleSheetAction(
-          {
-            action: 'verifyProjectInsolvencies',
-            offset
-          },
-          {
-            onRetry: ({ nextAttempt, maxAttempts, status }) => {
-              const reason = status ? `dočasná chyba ${status}` : 'dočasný výpadek spojení';
-              setProjectInsolvencyNotice(
-                `ISIR: ${reason} · opakuji dávku ${batchNumber + 1} (pokus ${nextAttempt}/${maxAttempts})…`
-              );
-            }
-          }
-        );
-        const batch = result?.batch;
-        if (!batch) throw new Error('ISIR nevrátil výsledek hromadné kontroly.');
-        receivedRows.push(...(Array.isArray(batch.verifications) ? batch.verifications : []));
-        totalChecked += Number(batch.verified || 0);
-        totalMatched += Number(batch.matched || 0);
-        totalFailed += Number(batch.failed || 0);
-        missingIdentity = Number(batch.missingIdentity || 0);
-        totalEligible = Number(batch.totalEligible || 0);
+        try {
+          const snapshot = await checkClientInIsir(client);
+          successful += 1;
+          if (/^(ano|true|1)$/i.test(String(snapshot?.verification?.matched || ''))) matched += 1;
+        } catch (error) {
+          failed += 1;
+          lastFailure = String(error?.message || error).slice(0, 180);
+        }
         setProjectInsolvencyNotice(
-          `ISIR: ověřeno ${totalChecked} z ${totalEligible} klientů projektu ${activeProjectId}…`
+          `ISIR: zpracováno ${index + 1} z ${eligibleClients.length} · úspěšně ${successful} · nalezeno ${matched} · chyby ${failed}${lastFailure ? ` · poslední chyba: ${lastFailure}` : ''}`
         );
-        if (batch.nextOffset === null || batch.nextOffset === undefined) break;
-        offset = Number(batch.nextOffset);
+        if (index < eligibleClients.length - 1) {
+          await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+        }
       }
-
-      const mapped = mapSheetRecordsToAppRecords({
-        insolvencyVerifications: receivedRows
-      }, clientIndex);
-      if (mapped.length) {
-        const ids = new Set(mapped.map((record) => record.id));
-        setRecords((previous) => [
-          ...mapped,
-          ...previous.filter((record) => !ids.has(record.id))
-        ].sort(compareTimelineRecordsDesc));
-      }
-
       const summary = [
-        `ISIR dokončen: ověřeno ${totalChecked} klientů`,
-        `započitatelná insolvence u ${totalMatched}`,
-        totalFailed ? `chyb ${totalFailed}` : '',
+        `ISIR dokončen: zpracováno ${eligibleClients.length} klientů`,
+        `úspěšně ${successful}`,
+        `nalezeno ${matched}`,
+        failed ? `chyby ${failed}` : '',
         missingIdentity ? `bez úplné identity ${missingIdentity}` : ''
       ].filter(Boolean).join(' · ');
       setProjectInsolvencyNotice(summary);
       setFlash(summary);
-    } catch (error) {
-      console.error('Bulk ISIR verification failed:', error);
-      const message = saveErrorMessage('Hromadná kontrola ISIR se nezdařila', error);
-      setProjectInsolvencyNotice(message);
-      setFlash(message);
     } finally {
       setIsVerifyingProjectInsolvencies(false);
+    }
+  };
+
+  const archiveIsirDocument = async (documentId) => {
+    try {
+      const result = await postGoogleSheetAction({
+        action: 'archiveIsirDocument',
+        document_id: documentId
+      });
+      if (!result?.document) throw new Error('Google Disk nevrátil uložený dokument.');
+      setInsolvencyDocuments((previous) => previous.map((item) =>
+        item.document_id === documentId ? result.document : item
+      ));
+      setFlash('Dokument ISIR byl uložen do klientské složky na Google Disku.');
+      return result.document;
+    } catch (error) {
+      const message = saveErrorMessage('Dokument ISIR se nepodařilo uložit', error);
+      setFlash(message);
+      throw error;
     }
   };
 
@@ -8038,6 +8119,22 @@ ${rawPlanOutput}` }] }],
             </Panel>
             <div aria-hidden="true" className="hidden xl:block" />
           </div>
+        )}
+
+        {mainView === 'isir' && (
+          <React.Suspense fallback={<LazyViewFallback />}>
+            <IsirView
+              clients={projectClients}
+              cases={insolvencyCases}
+              documents={insolvencyDocuments}
+              verifications={insolvencyVerifications}
+              isChecking={isVerifyingInsolvency || isVerifyingProjectInsolvencies}
+              progressNotice={projectInsolvencyNotice}
+              onCheckClient={verifyClientFromIsirView}
+              onCheckProject={verifyProjectInsolvencies}
+              onArchiveDocument={archiveIsirDocument}
+            />
+          </React.Suspense>
         )}
 
         {mainView === 'ai-tools' && (

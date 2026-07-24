@@ -95,6 +95,22 @@ const DATA_SHEETS = Object.freeze({
       'source', 'source_status'
     ])
   }),
+  insolvencyCases: Object.freeze({
+    name: 'InsolvencyCases',
+    headers: Object.freeze([
+      'case_id', 'project_id', 'client_id', 'client_number', 'case_number',
+      'proceeding_started_at', 'proceeding_ended_at', 'case_status', 'detail_url',
+      'city', 'document_count', 'checked_at', 'updated_at', 'updated_by'
+    ])
+  }),
+  insolvencyDocuments: Object.freeze({
+    name: 'InsolvencyDocuments',
+    headers: Object.freeze([
+      'document_id', 'case_id', 'project_id', 'client_id', 'title', 'document_type',
+      'event_date', 'source_url', 'drive_file_id', 'drive_url', 'original_size',
+      'stored_size', 'checked_at', 'updated_at', 'updated_by'
+    ])
+  }),
   performances: Object.freeze({
     name: 'Performances',
     headers: Object.freeze([

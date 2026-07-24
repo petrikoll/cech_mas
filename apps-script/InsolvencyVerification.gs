@@ -3,6 +3,7 @@ const ISIR_CUZK_ENDPOINT = 'https://isir.justice.cz:8443/isir_cuzk_ws/IsirWsCuzk
 const ISIR_DAILY_BATCH_SIZE = 40;
 const ISIR_REVERIFY_AFTER_MS = 24 * 60 * 60 * 1000;
 const ISIR_REQUEST_DELAY_MS = 1300;
+const ISIR_INTERACTIVE_BATCH_SIZE = 1;
 
 function listInsolvencyVerifications_(projectId) {
   const normalizedProjectId = requireProjectId_(projectId);
@@ -13,6 +14,171 @@ function listInsolvencyVerifications_(projectId) {
       delete value.__rowNumber;
       return value;
     });
+}
+
+function listInsolvencyCases_(projectId) {
+  const normalizedProjectId = requireProjectId_(projectId);
+  return readDataObjects_(DATA_SHEETS.insolvencyCases)
+    .filter((row) => row.project_id === normalizedProjectId)
+    .map((row) => {
+      const value = Object.assign({}, row);
+      delete value.__rowNumber;
+      return value;
+    });
+}
+
+function listInsolvencyDocuments_(projectId) {
+  const normalizedProjectId = requireProjectId_(projectId);
+  return readDataObjects_(DATA_SHEETS.insolvencyDocuments)
+    .filter((row) => row.project_id === normalizedProjectId)
+    .map((row) => {
+      const value = Object.assign({}, row);
+      delete value.__rowNumber;
+      return value;
+    });
+}
+
+function normalizeIsirSourceUrl_(value) {
+  const url = normalizeText_(value);
+  if (!/^https:\/\/isir\.justice\.cz(?::8443)?\//i.test(url)) {
+    throw new Error('Dokument nepochází z povolené adresy ISIR.');
+  }
+  return url;
+}
+
+function saveInsolvencySnapshot_(snapshot, context) {
+  const value = snapshot || {};
+  const verification = Object.assign({}, value.verification || {});
+  const clientId = normalizeText_(verification.client_id);
+  const index = getClientIndexById_(clientId);
+  if (!index || index.project_id !== context.projectId) {
+    throw new Error('Klient pro uložení kontroly ISIR nebyl v projektu nalezen.');
+  }
+
+  const timestamp = nowIso_();
+  verification.client_id = clientId;
+  verification.client_number = Number(index.client_number);
+  verification.project_id = context.projectId;
+  verification.verified_at = normalizeText_(verification.verified_at) || timestamp;
+  verification.verified_by = context.actorId;
+  verification.source = normalizeText_(verification.source) || 'ISIR_CUZK_WS_SERVER';
+  verification.source_status = normalizeText_(verification.source_status) || 'NOT_FOUND';
+  verification.matched = isTruthy_(verification.matched) ? 'Ano' : 'Ne';
+  upsertDataObject_(
+    DATA_SHEETS.insolvencyVerifications,
+    'client_id',
+    clientId,
+    verification
+  );
+
+  const cases = Array.isArray(value.cases) ? value.cases : [];
+  cases.forEach((caseItem) => {
+    const caseId = normalizeText_(caseItem.case_id);
+    if (!caseId) return;
+    upsertDataObject_(DATA_SHEETS.insolvencyCases, 'case_id', caseId, {
+      case_id: caseId,
+      project_id: context.projectId,
+      client_id: clientId,
+      client_number: Number(index.client_number),
+      case_number: normalizeText_(caseItem.case_number),
+      proceeding_started_at: normalizeIsirDate_(caseItem.proceeding_started_at),
+      proceeding_ended_at: normalizeIsirDate_(caseItem.proceeding_ended_at),
+      case_status: normalizeText_(caseItem.case_status),
+      detail_url: normalizeText_(caseItem.detail_url),
+      city: normalizeText_(caseItem.city),
+      document_count: Math.max(0, Number(caseItem.document_count) || 0),
+      checked_at: normalizeText_(caseItem.checked_at) || timestamp,
+      updated_at: timestamp,
+      updated_by: context.actorId
+    });
+  });
+
+  const documents = Array.isArray(value.documents) ? value.documents : [];
+  documents.forEach((documentItem) => {
+    const documentId = normalizeText_(documentItem.document_id);
+    const caseId = normalizeText_(documentItem.case_id);
+    if (!documentId || !caseId) return;
+    const existing = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
+      .find((row) => String(row.document_id || '') === documentId);
+    upsertDataObject_(DATA_SHEETS.insolvencyDocuments, 'document_id', documentId, {
+      document_id: documentId,
+      case_id: caseId,
+      project_id: context.projectId,
+      client_id: clientId,
+      title: normalizeText_(documentItem.title) || 'Dokument ISIR',
+      document_type: normalizeText_(documentItem.document_type) || 'PDF',
+      event_date: normalizeIsirDate_(documentItem.event_date),
+      source_url: normalizeIsirSourceUrl_(documentItem.source_url),
+      drive_file_id: existing ? existing.drive_file_id : '',
+      drive_url: existing ? existing.drive_url : '',
+      original_size: existing ? existing.original_size : '',
+      stored_size: existing ? existing.stored_size : '',
+      checked_at: normalizeText_(documentItem.checked_at) || timestamp,
+      updated_at: timestamp,
+      updated_by: context.actorId
+    });
+  });
+
+  writeAudit_(
+    context,
+    'SAVE_ISIR_SNAPSHOT',
+    'CLIENT',
+    clientId,
+    'OK',
+    'cases=' + cases.length + ';documents=' + documents.length
+  );
+  return {
+    verification: verification,
+    cases: listInsolvencyCases_(context.projectId).filter((item) => item.client_id === clientId),
+    documents: listInsolvencyDocuments_(context.projectId).filter((item) => item.client_id === clientId)
+  };
+}
+
+function archiveIsirDocument_(documentId, context) {
+  const normalizedDocumentId = normalizeText_(documentId);
+  const documentRow = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
+    .find((row) => String(row.document_id || '') === normalizedDocumentId);
+  if (!documentRow || documentRow.project_id !== context.projectId) {
+    throw new Error('Dokument ISIR nebyl v projektu nalezen.');
+  }
+  const existingFile = getDriveFileByIdOrNull_(documentRow.drive_file_id);
+  if (existingFile) return Object.assign({}, documentRow, {
+    drive_file_id: existingFile.getId(),
+    drive_url: existingFile.getUrl()
+  });
+
+  const clientDocumentRow = getClientDocumentRow_(documentRow.client_id);
+  const clientFolder = getDriveFolderByIdOrNull_(clientDocumentRow && clientDocumentRow.folder_id);
+  if (!clientFolder) throw new Error('Klient nemá založenou složku na Google Disku.');
+  const isirFolder = ensureSubfolder_(clientFolder, 'ISIR');
+  const sourceUrl = normalizeIsirSourceUrl_(documentRow.source_url);
+  const response = UrlFetchApp.fetch(sourceUrl, {
+    muteHttpExceptions: true,
+    headers: { 'User-Agent': 'CECH-MAS-Vykaznictvi/1.0' }
+  });
+  if (response.getResponseCode() < 200 || response.getResponseCode() >= 300) {
+    throw new Error('Stažení dokumentu z ISIR selhalo (HTTP ' + response.getResponseCode() + ').');
+  }
+  const originalBlob = response.getBlob();
+  const safeTitle = (normalizeText_(documentRow.title) || 'Dokument ISIR')
+    .replace(/[\\/:*?"<>|]/g, '-')
+    .slice(0, 140);
+  const fileName = /\.pdf$/i.test(safeTitle) ? safeTitle : safeTitle + '.pdf';
+  const existingByName = firstFileByName_(isirFolder, fileName);
+  const driveFile = existingByName || isirFolder.createFile(originalBlob.setName(fileName));
+  const timestamp = nowIso_();
+  const stored = Object.assign({}, documentRow, {
+    drive_file_id: driveFile.getId(),
+    drive_url: driveFile.getUrl(),
+    original_size: originalBlob.getBytes().length,
+    stored_size: driveFile.getSize(),
+    updated_at: timestamp,
+    updated_by: context.actorId
+  });
+  delete stored.__rowNumber;
+  upsertDataObject_(DATA_SHEETS.insolvencyDocuments, 'document_id', normalizedDocumentId, stored);
+  writeAudit_(context, 'ARCHIVE_ISIR_DOCUMENT', 'ISIR_DOCUMENT', normalizedDocumentId, 'OK', fileName);
+  return stored;
 }
 
 function escapeXmlText_(value) {
@@ -160,16 +326,24 @@ function verifyProjectInsolvenciesBatch_(context, options) {
     const eligibleClients = projectClients.filter((client) =>
       client.klient_id && client.jmeno && client.prijmeni && client.datum_narozeni
     );
-    const candidates = eligibleClients.slice(offset, offset + ISIR_DAILY_BATCH_SIZE);
+    // Hromadná kontrola z aplikace zpracovává jednoho klienta na jeden HTTP
+    // požadavek. Prohlížeč tak dostane průběžnou odpověď a dlouhý dotaz
+    // neskončí chybou brány dříve, než lze zobrazit výsledek.
+    const candidates = eligibleClients.slice(offset, offset + ISIR_INTERACTIVE_BATCH_SIZE);
     const verifications = [];
+    const errors = [];
     let failed = 0;
 
-    candidates.forEach((client, index) => {
-      if (index > 0) Utilities.sleep(ISIR_REQUEST_DELAY_MS);
+    candidates.forEach((client) => {
       try {
         verifications.push(verifyClientInsolvency_(client.klient_id, context));
       } catch (error) {
         failed += 1;
+        errors.push({
+          client_id: client.klient_id,
+          client_number: client.client_number,
+          message: String(error && error.message ? error.message : error)
+        });
         writeAudit_(context, 'VERIFY_ISIR', 'CLIENT', client.klient_id, 'ERROR', error.message);
       }
     });
@@ -185,8 +359,10 @@ function verifyProjectInsolvenciesBatch_(context, options) {
       verified: verifications.length,
       matched: verifications.filter((item) => isTruthy_(item.matched)).length,
       failed,
+      processedClientNumber: candidates.length ? Number(candidates[0].client_number) : null,
       nextOffset: processedTo < eligibleClients.length ? processedTo : null,
-      verifications
+      verifications,
+      errors
     };
   } finally {
     lock.releaseLock();

@@ -100,12 +100,23 @@ test('ISIR započte pouze vstup do insolvence od 1. 3. 2026', () => {
 
 test('automatické ověření ISIR dodržuje denní stáří a bezpečnou velikost dávky', () => {
   assert.match(insolvencyVerificationSource, /ISIR_DAILY_BATCH_SIZE = 40/);
+  assert.match(insolvencyVerificationSource, /ISIR_INTERACTIVE_BATCH_SIZE = 1/);
   assert.match(insolvencyVerificationSource, /ISIR_REVERIFY_AFTER_MS = 24 \* 60 \* 60 \* 1000/);
   assert.match(insolvencyVerificationSource, /ISIR_REQUEST_DELAY_MS = 1300/);
   assert.match(insolvencyVerificationSource, /everyHours\(1\)/);
   assert.match(insolvencyVerificationSource, /scheduledDailyInsolvencyVerification/);
   assert.match(insolvencyVerificationSource, /verifyProjectInsolvenciesBatch_/);
   assert.match(insolvencyVerificationSource, /nextOffset/);
+  assert.match(insolvencyVerificationSource, /processedClientNumber/);
+});
+
+test('ISIR snapshot ukládá řízení, dokumenty a odkazy na Google Disk', () => {
+  assert.match(source, /name: 'InsolvencyCases'/);
+  assert.match(source, /name: 'InsolvencyDocuments'/);
+  assert.match(insolvencyVerificationSource, /saveInsolvencySnapshot_/);
+  assert.match(insolvencyVerificationSource, /archiveIsirDocument_/);
+  assert.match(insolvencyVerificationSource, /ensureSubfolder_\(clientFolder, 'ISIR'\)/);
+  assert.match(insolvencyVerificationSource, /drive_url/);
 });
 
 test('číslování vychází pouze z obsazených klientských řádků', () => {

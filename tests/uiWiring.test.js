@@ -178,8 +178,24 @@ test('dashboard spouští hromadnou kontrolu klientů v ISIR', () => {
   assert.match(reportingSource, /Kontrola zatím nebyla spuštěna/);
   assert.match(appSource, /verifyProjectInsolvencies/);
   assert.match(appSource, /isVerifyingProjectInsolvencies/);
-  assert.match(appSource, /zpracovávám dávku/);
-  assert.match(appSource, /opakuji dávku/);
+  assert.match(appSource, /for \(let index = 0; index < eligibleClients\.length; index \+= 1\)/);
+  assert.match(appSource, /await checkClientInIsir\(client\)/);
+  assert.match(appSource, /const delayMs = 2500/);
+  assert.match(appSource, /poslední chyba/);
+});
+
+test('hlavní navigace obsahuje plnohodnotný list ISIR', () => {
+  const isirViewSource = readFileSync(
+    new URL('../src/app/IsirView.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(configSource, /id: 'isir', name: 'ISIR'/);
+  assert.match(appSource, /mainView === 'isir'/);
+  assert.match(appSource, /saveInsolvencySnapshot/);
+  assert.match(appSource, /archiveIsirDocument/);
+  assert.match(isirViewSource, /Zkontrolovat celý projekt/);
+  assert.match(isirViewSource, /Uložit na Disk/);
+  assert.match(isirViewSource, /Dokumenty/);
 });
 
 test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy', () => {

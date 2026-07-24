@@ -107,12 +107,19 @@ technická evidence a nezvyšují počet ani čas klientských výkonů.
 
 ## Ověření insolvence
 
-Akce `verifyClientInsolvency` ověřuje klienta proti oficiální webové službě
-`ISIR_CUZK_WS` podle přesné shody jména, příjmení a data narození. Do cíle
+Produkční aplikace ověřuje klienta proti oficiální webové službě
+`ISIR_CUZK_WS` ze serveru aplikace podle přesné shody jména, příjmení a data
+narození. Apps Script přijímá výsledek pouze pro klienta ze zvoleného projektu
+a ukládá jej akcí `saveInsolvencySnapshot`. Do cíle
 „Schválené insolvence“ se uloží pouze ověření s datem právní moci usnesení
 o úpadku od 1. 3. 2026 včetně. Výsledek, datum, spisová značka, odkaz a čas
-ověření se uchovávají v listu `InsolvencyVerifications`; datum narození ani
-další osobní údaje se do tohoto listu nekopírují.
+ověření se uchovávají v listu `InsolvencyVerifications`. Řízení a dokumenty
+jsou v listech `InsolvencyCases` a `InsolvencyDocuments`; datum narození se do
+těchto listů nekopíruje.
+
+Akce `archiveIsirDocument` uloží vybrané PDF do podsložky `ISIR` ve složce
+klienta na Google Disku, zachová zdrojový odkaz a opakovaným spuštěním
+nevytváří další kopii stejného dokumentu.
 
 Pro automatickou kontrolu je nutné jednou ručně spustit:
 
@@ -124,3 +131,8 @@ Spouštěč každou hodinu vybere nejvýše 40 klientů, kteří nebyli ověřen
 posledních 24 hodin. Mezi dotazy čeká 1,3 sekundy. Tím se celý registr průběžně
 zkontroluje jednou denně a současně se dodrží provozní limit ISIR 50 požadavků
 za minutu. Jednotlivá chyba nezastaví zbytek dávky a uloží se do auditu.
+
+Ruční hromadná kontrola v aplikaci zpracovává vždy jednoho klienta v jednom
+požadavku přímo ze serveru. Mezi klienty čeká 2,5 sekundy a po každém klientovi
+zobrazí počet zpracovaných a úspěšně ověřených záznamů i případnou poslední
+chybu. Původní Apps Script kontrola zůstává jako nouzová kompatibilní cesta.
