@@ -249,7 +249,6 @@ async function extractStructuredDocument({ document, pdf, apiKey, fetchImpl, sig
     fetchImpl,
     signal
   });
-  const amount = parseLocalizedNumber(extraction.amount);
   return {
     document_id: String(document.document_id || ''),
     title: document.title || '',
@@ -273,6 +272,7 @@ async function extractClaimAmount({ document, pdf, apiKey, fetchImpl, signal }) 
     fetchImpl,
     signal
   });
+  const amount = parseLocalizedNumber(extraction.amount);
   return {
     document_id: String(document.document_id || ''),
     title: document.title || '',

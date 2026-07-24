@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  analyzeIsirDocuments,
   currentDateInPrague,
   minimizeSummary,
   normalizeIsirPdfUrl,
@@ -9,6 +10,21 @@ import {
   parseGeminiJson,
   parseGeminiText
 } from '../isirAnalysis.js';
+
+const mockPdfAndGeminiFetch = (geminiPayload) => async (url) => {
+  if (String(url).includes('generativelanguage.googleapis.com')) {
+    return new Response(JSON.stringify({
+      candidates: [{ content: { parts: [{ text: JSON.stringify(geminiPayload) }] } }]
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' }
+    });
+  }
+  return new Response(Buffer.from('%PDF-1.4\nmock\n%%EOF'), {
+    status: 200,
+    headers: { 'content-type': 'application/pdf' }
+  });
+};
 
 test('ISIR AI bezpečně převádí české formáty částek', () => {
   assert.equal(parseLocalizedNumber('1 234,50 Kč'), 1234.5);
@@ -72,6 +88,58 @@ test('ISIR AI rozlišuje formulářová PDF a přihlášky pohledávek', () => {
   assert.equal(isClaimApplicationDocument({ title: 'Přihláška pohledávky' }), true);
   assert.match(STRUCTURED_REPORT_EXTRACTION_PROMPT, /reviewed_unsecured_claims_total/);
   assert.match(CLAIM_AMOUNT_EXTRACTION_PROMPT, /V\. Pohledávky celkem/);
+});
+
+test('strukturované čtení formuláře vrátí uložitelnou extrakci', async () => {
+  const analysis = await analyzeIsirDocuments({
+    mode: 'structured-extraction',
+    client: { id: 'client-1', projectId: 'MAS' },
+    case: { case_id: 'case-1' },
+    documents: [{
+      document_id: 'document-1',
+      title: 'Zpráva o plnění oddlužení',
+      source_url: 'https://isir.justice.cz/isir/doc/dokument.PDF?id=123',
+      is_main: 'Ano'
+    }]
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: mockPdfAndGeminiFetch({
+      proceeding_state: { stage: 'permitted' },
+      confidence: 'high'
+    })
+  });
+
+  assert.equal(analysis.kind, 'STRUCTURED_DOCUMENT_EXTRACTION');
+  assert.equal(analysis.result.structured_extractions[0].document_id, 'document-1');
+  assert.equal(
+    analysis.result.structured_extractions[0].structured_extraction.proceeding_state.stage,
+    'permitted'
+  );
+});
+
+test('čtení přihlášky bezpečně převede částku z odpovědi Gemini', async () => {
+  const analysis = await analyzeIsirDocuments({
+    mode: 'claim-extraction',
+    client: { id: 'client-1', projectId: 'MAS' },
+    case: { case_id: 'case-1', claims_total_amount: 100 },
+    documents: [{
+      document_id: 'claim-1',
+      title: 'Přihláška pohledávky',
+      source_url: 'https://isir.justice.cz/isir/doc/dokument.PDF?id=124',
+      is_main: 'Ano'
+    }]
+  }, {
+    apiKey: 'test-key',
+    fetchImpl: mockPdfAndGeminiFetch({
+      amount: '1 234,50 Kč',
+      currency: 'CZK',
+      confidence: 'high'
+    })
+  });
+
+  assert.equal(analysis.kind, 'CLAIM_AMOUNT_EXTRACTION');
+  assert.equal(analysis.result.claim_amount_extractions[0].amount, 1234.5);
+  assert.equal(analysis.result.claims_total_amount, 1334.5);
 });
 
 test('minimalizované shrnutí zachová jen stručnou sekci', () => {
