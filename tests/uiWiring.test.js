@@ -41,6 +41,19 @@ test('uložení výkonu KA1 předává backendu vybrané činnosti a přesnou d�
   assert.match(appSource, /duration_minutes: payload\.durationMinutes \|\| ''/);
 });
 
+test('pomalé exportní knihovny se načítají až při skutečném exportu', () => {
+  assert.doesNotMatch(appSource, /^import jsPDF/m);
+  assert.doesNotMatch(appSource, /^import html2canvas/m);
+  assert.match(appSource, /import\('html2canvas'\)/);
+  assert.match(appSource, /import\('jspdf'\)/);
+});
+
+test('klientský registr používá rychlou relační mezipaměť', () => {
+  assert.match(appSource, /window\.sessionStorage\.getItem\(clientCacheKey\)/);
+  assert.match(appSource, /window\.sessionStorage\.setItem\(clientCacheKey/);
+  assert.match(appSource, /setIsLoadingClients\(cachedClients\.length === 0\)/);
+});
+
 test('KA1 performance form is bundled with the main React runtime', () => {
   assert.match(appSource, /import Ka02View from '\.\/Ka02View\.jsx';/);
   assert.doesNotMatch(appSource, /const Ka02View = React\.lazy/);

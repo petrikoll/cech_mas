@@ -1,6 +1,4 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 import {
   Activity,
   AlertCircle,
@@ -2494,8 +2492,27 @@ function App() {
   }, [user]);
 
   useEffect(() => {
+    const clientCacheKey = `cechMasReporting.clients.${activeProjectId}`;
+    let cachedClients = [];
+    try {
+      const cachedValue = JSON.parse(window.sessionStorage.getItem(clientCacheKey) || '[]');
+      cachedClients = Array.isArray(cachedValue)
+        ? cachedValue.filter((client) => client?.projectId === activeProjectId)
+        : [];
+    } catch {
+      cachedClients = [];
+    }
+
+    if (cachedClients.length > 0) {
+      setClients(cachedClients);
+      setIsClientRegistryAvailable(true);
+      setSelectedClientId((current) =>
+        cachedClients.some((client) => client.id === current) ? current : cachedClients[0].id
+      );
+    }
+
     const fetchClients = async () => {
-      setIsLoadingClients(true);
+      setIsLoadingClients(cachedClients.length === 0);
       setSheetError('');
       try {
         const clientsUrl = new URL(GOOGLE_SHEET_MACRO_URL, window.location.origin);
@@ -2520,6 +2537,11 @@ function App() {
           .filter((client) => client?.projectId === activeProjectId);
 
         if (parsed.length > 0) {
+          try {
+            window.sessionStorage.setItem(clientCacheKey, JSON.stringify(parsed));
+          } catch {
+            // Rychlá mezipaměť je pouze volitelná; autoritativním zdrojem zůstává Google Sheet.
+          }
           setIsClientRegistryAvailable(true);
           setClients(parsed);
           setSelectedClientId(parsed[0].id);
@@ -2541,6 +2563,11 @@ function App() {
         }
       } catch (error) {
         console.error('Google Sheets load error:', error);
+        if (cachedClients.length > 0) {
+          setSheetError('Aktualizace registru se nezdařila. Zobrazuji poslední data z této relace; ukládání je do obnovení spojení zablokováno.');
+          setIsClientRegistryAvailable(false);
+          return;
+        }
         setIsClientRegistryAvailable(false);
         setClients([]);
         setSelectedClientId('');
@@ -5764,6 +5791,10 @@ ${rawOutput}` }] }],
       }
 
       await new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf')
+      ]);
       const canvas = await html2canvas(wrapper, {
         scale: 2,
         useCORS: false,
