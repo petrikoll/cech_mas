@@ -120,6 +120,21 @@ function parseLocalizedNumber(value) {
   return Number(text);
 }
 
+function geminiRetryDelayMs(payload, headers, fallbackMs = 1500) {
+  const retryAfterSeconds = Number(headers?.get?.('retry-after'));
+  const retryInfo = (Array.isArray(payload?.error?.details) ? payload.error.details : [])
+    .map((item) => String(item?.retryDelay || ''))
+    .find(Boolean);
+  const message = String(payload?.error?.message || '');
+  const seconds = Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+    ? retryAfterSeconds
+    : Number(retryInfo?.match(/([\d.]+)s/i)?.[1] || message.match(/retry in\s+([\d.]+)s/i)?.[1]);
+  const requestedMs = Number.isFinite(seconds) && seconds > 0
+    ? Math.ceil(seconds * 1000) + 500
+    : fallbackMs;
+  return Math.min(75_000, Math.max(1_500, requestedMs));
+}
+
 async function generateGemini({ apiKey, parts, json = false, fetchImpl, signal }) {
   let lastError;
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -145,6 +160,11 @@ async function generateGemini({ apiKey, parts, json = false, fetchImpl, signal }
         payload?.error?.message || `Gemini analýza selhala (HTTP ${upstream.status}).`
       );
       if (upstream.status !== 429 && upstream.status < 500) throw error;
+      error.retryDelayMs = geminiRetryDelayMs(
+        payload,
+        upstream.headers,
+        1500 * (attempt + 1)
+      );
       lastError = error;
     } catch (error) {
       if (error?.name === 'AbortError') throw error;
@@ -159,7 +179,7 @@ async function generateGemini({ apiKey, parts, json = false, fetchImpl, signal }
         const timer = setTimeout(() => {
           signal?.removeEventListener('abort', onAbort);
           resolve();
-        }, 1500 * (attempt + 1));
+        }, lastError?.retryDelayMs || 1500 * (attempt + 1));
         signal?.addEventListener('abort', onAbort, { once: true });
       });
     }
@@ -612,6 +632,7 @@ export {
   MAX_DOCUMENTS,
   analyzeIsirDocuments,
   currentDateInPrague,
+  geminiRetryDelayMs,
   handleIsirAnalysisRequest,
   minimizeSummary,
   normalizeIsirPdfUrl,

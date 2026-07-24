@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   analyzeIsirDocuments,
   currentDateInPrague,
+  geminiRetryDelayMs,
   minimizeSummary,
   normalizeIsirPdfUrl,
   normalizedCorrections,
@@ -88,6 +89,20 @@ test('ISIR AI rozlišuje formulářová PDF a přihlášky pohledávek', () => {
   assert.equal(isClaimApplicationDocument({ title: 'Přihláška pohledávky' }), true);
   assert.match(STRUCTURED_REPORT_EXTRACTION_PROMPT, /reviewed_unsecured_claims_total/);
   assert.match(CLAIM_AMOUNT_EXTRACTION_PROMPT, /V\. Pohledávky celkem/);
+});
+
+test('Gemini fronta respektuje doporučené čekání při vyčerpání minutové kvóty', () => {
+  assert.equal(geminiRetryDelayMs({
+    error: {
+      message: 'Quota exceeded. Please retry in 58.018447702s.',
+      details: []
+    }
+  }), 58519);
+  assert.equal(geminiRetryDelayMs({
+    error: {
+      details: [{ retryDelay: '12.5s' }]
+    }
+  }), 13000);
 });
 
 test('strukturované čtení formuláře vrátí uložitelnou extrakci', async () => {
