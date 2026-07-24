@@ -22,6 +22,10 @@ const projectsSource = readFileSync(
   new URL('../src/config/projects.js', import.meta.url),
   'utf8'
 );
+const reportingSource = readFileSync(
+  new URL('../src/app/ReportingView.jsx', import.meta.url),
+  'utf8'
+);
 
 test('formulář výkonů KA1 používá existující stav ukládání', () => {
   assert.doesNotMatch(appSource, /isSaving=\{saving\}/);
@@ -105,4 +109,14 @@ test('projekty CECH a MAS mají velký přepínač a odlišné barevné pozadí'
   assert.match(appSource, /activeProject\.theme\.header \|\| viewTheme\.header/);
   assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#c7d2fe/);
   assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#bbf7d0/);
+});
+
+test('dashboard sleduje jen smluvené indikátory a projektové cíle', () => {
+  assert.match(reportingSource, /Plnění indikátorů/);
+  assert.match(reportingSource, /Plnění cílů/);
+  assert.match(reportingSource, /Plnění indikátorů výstupů celkem v %/);
+  assert.match(reportingSource, /Plnění indikátorů výsledků celkem v %/);
+  assert.doesNotMatch(reportingSource, /Vzdělávání a supervize podle pozic/);
+  assert.doesNotMatch(reportingSource, /Dlouhodobá podpora/);
+  assert.doesNotMatch(reportingSource, /Individuální plán/);
 });

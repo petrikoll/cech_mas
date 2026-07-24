@@ -95,6 +95,7 @@ import {
   normalizePerformanceTime
 } from '../lib/legacyPerformancePresentation.js';
 import { mapPaymentPlanRowToRecord } from '../lib/paymentPlans.js';
+import { buildProjectDashboard } from '../lib/projectDashboard.js';
 import AiDocumentPanel from './AiDocumentPanel.jsx';
 import Ka02View from './Ka02View.jsx';
 import ProjectSwitcher from '../components/ProjectSwitcher.jsx';
@@ -3047,6 +3048,11 @@ function App() {
       ]
     };
   }, [clients, filteredRecords, professionalDevelopmentRecords, records, selectedReportingPeriod]);
+
+  const projectDashboard = useMemo(
+    () => buildProjectDashboard({ projectId: activeProjectId, clients, records }),
+    [activeProjectId, clients, records]
+  );
 
   const periodRecordsForZor = useMemo(
     () => records.filter(
@@ -7672,6 +7678,8 @@ ${rawPlanOutput}` }] }],
           <React.Suspense fallback={<LazyViewFallback />}>
             <ReportingView
               dashboardOverview={dashboardOverview}
+              projectDashboard={projectDashboard}
+              activeProjectId={activeProjectId}
               exportClientsCsv={exportClientsCsv}
               exportAllRecordsBackup={exportAllRecordsBackup}
               supportExportCount={getUniqueClientSupportRecords(filteredRecords).length}
