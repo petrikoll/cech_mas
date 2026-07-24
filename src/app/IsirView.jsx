@@ -615,7 +615,7 @@ export default function IsirView({
                       </button>
                     )}
                   </div>
-                  {!selectedAnalysis && !selectedCase.ai_summary_json ? (
+                  {!selectedAnalysis && !selectedCase.ai_summary_json && !documentSummaries.length ? (
                     <div className="mt-4 rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-6 text-center">
                       <Bot className="mx-auto h-7 w-7 text-violet-400" />
                       <p className="mt-2 text-sm font-bold text-slate-800">Vyberte důležité dokumenty a vytvořte společnou analýzu.</p>
