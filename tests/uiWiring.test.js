@@ -249,4 +249,5 @@ test('ISIR AI používá frontu, samostatná shrnutí a potvrzované návrhy opr
   assert.match(isirSource, /Minimalizovaná shrnutí/);
   assert.match(isirSource, /Zkontrolovat údaje/);
   assert.match(isirSource, /Potvrdit vybrané změny/);
+  assert.match(isirSource, /item\.kind === 'LEGACY_LOCAL_IMPORT'/);
 });

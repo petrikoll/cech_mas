@@ -155,7 +155,11 @@ export default function IsirView({
   const latestAnalysisByCase = useMemo(() => {
     const map = {};
     analyses
-      .filter((item) => !item.kind || item.kind === 'CASE_DOCUMENT_ANALYSIS')
+      .filter((item) =>
+        !item.kind
+        || item.kind === 'CASE_DOCUMENT_ANALYSIS'
+        || item.kind === 'LEGACY_LOCAL_IMPORT'
+      )
       .slice()
       .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
       .forEach((item) => {
