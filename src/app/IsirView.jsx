@@ -21,7 +21,6 @@ import {
   Scale,
   Search,
   ShieldAlert,
-  Sparkles,
   Users,
   UploadCloud,
   X
@@ -34,6 +33,11 @@ const formatDate = (value, withTime = false) => {
   if (!match) return '—';
   const date = `${Number(match[3])}. ${Number(match[2])}. ${match[1]}`;
   return withTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date;
+};
+
+const formatCompactDate = (value) => {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return match ? `${match[3]}.${match[2]}.${match[1]}` : '—';
 };
 
 const formatMoney = (value) => {
@@ -124,7 +128,6 @@ export default function IsirView({
   const [statusFilters, setStatusFilters] = useState([]);
   const [onlyNew, setOnlyNew] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
-  const [expandedDocumentId, setExpandedDocumentId] = useState('');
   const [previewDocumentId, setPreviewDocumentId] = useState('');
   const [archivingDocumentId, setArchivingDocumentId] = useState('');
   const [analysisTab, setAnalysisTab] = useState('current');
@@ -355,89 +358,62 @@ export default function IsirView({
           <>
             <div className="space-y-4">
               <div className="space-y-4">
-                <article className="overflow-hidden rounded-3xl border border-white bg-white/[0.95] shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
-                  <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                      <h3 className="text-lg font-black text-slate-950">Dokumenty ({selectedCaseDocuments.length})</h3>
-                      <p className="mt-1 text-sm text-slate-500">Dokument můžete rozbalit přímo zde, otevřít v nové kartě, stáhnout nebo uložit na Disk.</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {caseNewDocuments.length > 0 && (
-                        <button type="button" onClick={() => onMarkDocumentsSeen(selectedCase.case_id)} className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-extrabold text-amber-800">
-                          <BellRing className="h-4 w-4" /> Označit nové jako přečtené
-                        </button>
-                      )}
-                      <button type="button" onClick={runAnalysis} disabled={!selectedDocumentIds.length || isAnalyzing || selectedDocumentIds.length > 10} className="inline-flex items-center gap-2 rounded-xl bg-violet-700 px-4 py-2 text-xs font-extrabold text-white hover:bg-violet-800 disabled:cursor-not-allowed disabled:opacity-50">
-                        {isAnalyzing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                        Vytvořit AI shrnutí ({selectedDocumentIds.length})
+                <article className="overflow-hidden rounded-xl border border-[#dfcdb8] bg-white/[0.97] shadow-sm">
+                  <div className="flex min-h-[66px] items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+                    <h3 className="text-base font-black text-slate-800">Dokumenty</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-extrabold text-slate-500">Vybráno: {selectedDocumentIds.length}</span>
+                      <button type="button" onClick={runAnalysis} disabled={!selectedDocumentIds.length || isAnalyzing || selectedDocumentIds.length > 10} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#dcc5a9] bg-[#f6f2ec] px-3 text-xs font-extrabold text-slate-600 hover:bg-[#efe7dc] disabled:cursor-not-allowed disabled:opacity-60">
+                        {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+                        Vytvořit AI shrnutí
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto border-b border-slate-100 px-4 py-4" aria-label="Seznam PDF dokumentů">
-                    <div className="flex min-w-max divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
+                  <div className="overflow-x-auto px-4 pb-2 pt-2" aria-label="Seznam PDF dokumentů">
+                    <div className="flex min-w-max gap-2">
                     {selectedCaseDocuments.map((document) => {
                       const selected = selectedDocumentIds.includes(document.document_id);
-                      const expanded = expandedDocumentId === document.document_id;
-                      const documentAnalysis = safeParse(document.analysis_json, {});
                       return (
                         <div
                           key={document.document_id}
-                          className={`flex w-[158px] flex-none flex-col transition ${
+                          className={`flex h-[94px] w-[136px] flex-none flex-col overflow-hidden rounded-[10px] border shadow-sm transition ${
                             previewDocumentId === document.document_id
-                              ? 'bg-sky-50 ring-2 ring-inset ring-sky-300'
+                              ? 'border-sky-300 bg-sky-50 ring-1 ring-sky-200'
                               : selected
-                                ? 'bg-violet-50/70 ring-1 ring-inset ring-violet-200'
-                                : 'bg-white hover:bg-slate-50'
+                                ? 'border-violet-300 bg-violet-50/70 ring-1 ring-violet-200'
+                                : 'border-slate-300 bg-white hover:bg-[#fffaf4]'
                           }`}
                         >
-                          <div className="flex min-h-[96px] items-start gap-2 p-2">
+                          <div className="flex min-h-0 flex-1 items-start gap-2 px-2 py-1.5">
                               <input
                                 type="checkbox"
                                 checked={selected}
                                 disabled={!selected && selectedDocumentIds.length >= 10}
                                 onChange={() => toggleDocument(document.document_id)}
                                 aria-label={`Vybrat dokument ${document.title}`}
-                                className="mt-1 h-4 w-4 shrink-0 rounded border-slate-300 text-violet-700 focus:ring-violet-200 disabled:opacity-40"
+                                className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm border-slate-400 text-violet-700 focus:ring-violet-200 disabled:opacity-40"
                               />
                               <button
                                 type="button"
                                 onClick={() => setPreviewDocumentId(previewDocumentId === document.document_id ? '' : document.document_id)}
                                 className="min-w-0 flex-1 text-left"
                               >
-                                <span className="block text-xs font-extrabold text-slate-500">{formatDate(document.event_date)}</span>
-                                <strong className="mt-1 block line-clamp-3 text-xs leading-4 text-slate-900">{document.title}</strong>
-                                <span className="mt-1.5 flex flex-wrap items-center gap-1">
-                                  <span className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase ring-1 ${
-                                    isTruthy(document.is_main) ? 'bg-sky-50 text-sky-800 ring-sky-100' : 'bg-slate-50 text-slate-600 ring-slate-200'
-                                  }`}>{isTruthy(document.is_main) ? 'hlavní dokument' : 'příloha'}</span>
-                                  {isTruthy(document.is_new) && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-800 ring-1 ring-amber-200">nové</span>}
+                                <span className="block text-[10px] font-extrabold leading-3 text-slate-500">{formatCompactDate(document.event_date)}</span>
+                                <strong className="mt-0.5 block line-clamp-2 text-[10px] font-black leading-[12px] text-[#79491f]" title={document.title}>{document.title}</strong>
+                                <span className="mt-0.5 block truncate text-[9px] font-bold leading-3 text-slate-500">
+                                  {isTruthy(document.is_main) ? 'hlavní dokument' : 'příloha'}
+                                  {isTruthy(document.is_new) ? ' · nové' : ''}
                                 </span>
                               </button>
                           </div>
-                          <div className="mt-auto flex items-center gap-1 border-t border-slate-100 bg-slate-50/70 p-1.5">
-                              {documentAnalysis.summary && (
-                                <button type="button" onClick={() => setExpandedDocumentId(expanded ? '' : document.document_id)} title="AI shrnutí dokumentu" aria-label="AI shrnutí dokumentu" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-violet-100 bg-violet-50 text-violet-800">
-                                  <Bot className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                              <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50">
-                                <ExternalLink className="h-3.5 w-3.5" /> Otevřít
+                          <div className="mt-auto flex h-[30px] items-center gap-1 border-t border-[#eadfce] bg-[#fffaf4] px-1.5 py-1">
+                              <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex h-5 flex-1 items-center justify-center rounded-full border border-[#dfc4a5] bg-white px-2 text-[9px] font-bold text-slate-700 hover:bg-[#f7eee3]">
+                                Otevřít
                               </a>
-                              <a href={document.source_url} target="_blank" rel="noreferrer" download title="Stáhnout" aria-label={`Stáhnout ${document.title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-                                <Download className="h-3.5 w-3.5" />
+                              <a href={document.source_url} target="_blank" rel="noreferrer" download title="Stáhnout" aria-label={`Stáhnout ${document.title}`} className="inline-flex h-5 flex-1 items-center justify-center rounded-full border border-[#dfc4a5] bg-white px-2 text-[9px] font-bold text-slate-700 hover:bg-[#f7eee3]">
+                                Stáhnout
                               </a>
-                              {!document.drive_url && (
-                                <button type="button" onClick={() => archiveDocument(document.document_id)} disabled={Boolean(archivingDocumentId)} title="Uložit na Disk" aria-label={`Uložit na Disk ${document.title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60">
-                                  {archivingDocumentId === document.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
-                                </button>
-                              )}
                           </div>
-                          {expanded && documentAnalysis.summary && (
-                            <div className="border-t border-violet-100 bg-white p-2.5 text-[11px] leading-4 text-slate-700">
-                              <strong className="text-violet-800">{documentAnalysis.category || 'AI shrnutí dokumentu'}</strong>
-                              <p className="mt-1">{documentAnalysis.summary}</p>
-                            </div>
-                          )}
                         </div>
                       );
                     })}
@@ -460,6 +436,17 @@ export default function IsirView({
                           <a href={previewDocument.source_url} target="_blank" rel="noreferrer" download className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
                             <Download className="h-3.5 w-3.5" /> Stáhnout
                           </a>
+                          {!previewDocument.drive_url && (
+                            <button type="button" onClick={() => archiveDocument(previewDocument.document_id)} disabled={Boolean(archivingDocumentId)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60">
+                              {archivingDocumentId === previewDocument.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
+                              Uložit na Disk
+                            </button>
+                          )}
+                          {caseNewDocuments.length > 0 && (
+                            <button type="button" onClick={() => onMarkDocumentsSeen(selectedCase.case_id)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100">
+                              <BellRing className="h-3.5 w-3.5" /> Označit nové jako přečtené
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner">

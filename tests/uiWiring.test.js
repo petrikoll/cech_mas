@@ -223,10 +223,12 @@ test('ISIR imports a saved local archive without another Gemini call', () => {
   assert.match(isirViewSource, /Sbalit náhled/);
   assert.match(isirViewSource, /<iframe/);
   assert.match(isirViewSource, /const previewDocument =/);
-  assert.match(isirViewSource, /overflow-x-auto border-b border-slate-100/);
+  assert.match(isirViewSource, /overflow-x-auto px-4 pb-2 pt-2/);
   assert.match(isirViewSource, /aria-label="Seznam PDF dokumentů"/);
-  assert.match(isirViewSource, /flex min-w-max divide-x/);
-  assert.match(isirViewSource, /w-\[158px\] flex-none/);
+  assert.match(isirViewSource, /flex min-w-max gap-2/);
+  assert.match(isirViewSource, /h-\[94px\] w-\[136px\] flex-none/);
+  assert.match(isirViewSource, /Vybráno: \{selectedDocumentIds\.length\}/);
+  assert.match(isirViewSource, /Stáhnout\s*<\/a>/);
   assert.match(isirViewSource, /\/api\/isir-document\?url=/);
   assert.match(isirViewSource, /zoom=page-width&pagemode=thumbs/);
   assert.doesNotMatch(isirViewSource, /xl:grid-cols-\[minmax\(0,1\.28fr\)_minmax\(360px,0\.72fr\)\]/);
