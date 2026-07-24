@@ -42,6 +42,7 @@ this.__backendTest = {
   durationToMinutes_,
   minutesToDurationText_,
   normalizeLegacyTime_,
+  normalizeLegacyDateValue_,
   legacyPhaseForSheetName_,
   parseLegacyActivityCode_,
   buildLegacyPerformanceStableId_,
@@ -150,6 +151,18 @@ test('historický import normalizuje čas a vytváří stabilní ID slotu', () =
   const second = backend.buildLegacyPerformanceStableId_('file-1', 'Jednání se zájemcem', 'b4');
   assert.equal(first, second);
   assert.match(first, /^LEGACY-[a-f0-9]{40}$/);
+});
+
+test('historicky import cte datum z typovane hodnoty a ne z lokalizovaneho zobrazeni', () => {
+  const rawDate = new Date(Date.UTC(2026, 2, 1));
+  assert.equal(
+    backend.normalizeLegacyDateValue_(rawDate, '2.2.2026', 'Etc/UTC'),
+    '2026-03-02'
+  );
+  assert.equal(
+    backend.normalizeLegacyDateValue_(46082, '2.2.2026'),
+    '2026-03-02'
+  );
 });
 
 test('historický import páruje klienta podle identity bez ohledu na starý projekt', () => {

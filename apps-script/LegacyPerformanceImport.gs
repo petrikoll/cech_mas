@@ -1,5 +1,6 @@
 const LEGACY_IMPORT_OFFSET_PROPERTY = 'LEGACY_PERFORMANCE_IMPORT_OFFSET';
 const LEGACY_IMPORT_BATCH_SIZE = 8;
+const LEGACY_IMPORT_CACHE_VERSION = '5';
 
 function sha256Hex_(value) {
   const digest = Utilities.computeDigest(
@@ -20,6 +21,30 @@ function normalizeLegacyTime_(value) {
   const minutes = Number(match[2]);
   if (hours > 23 || minutes > 59) return '';
   return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+}
+
+function normalizeLegacyDateValue_(rawValue, displayValue, sourceTimeZone) {
+  if (
+    Object.prototype.toString.call(rawValue) === '[object Date]' &&
+    !Number.isNaN(rawValue.getTime())
+  ) {
+    const convertedXlsmDate = new Date(rawValue.getTime() + 86400000);
+    return Utilities.formatDate(
+      convertedXlsmDate,
+      sourceTimeZone || BACKEND_CONFIG.timeZone,
+      'yyyy-MM-dd'
+    );
+  }
+  if (typeof rawValue === 'number' && Number.isFinite(rawValue) && rawValue > 0) {
+    const wholeDays = Math.floor(rawValue) + 1;
+    const date = new Date(Date.UTC(1899, 11, 30) + wholeDays * 86400000);
+    return Utilities.formatDate(date, 'Etc/UTC', 'yyyy-MM-dd');
+  }
+  return normalizeIsoDate_(displayValue || rawValue);
+}
+
+function legacyImportCacheSourceVersion_(modifiedAt) {
+  return String(modifiedAt || '') + '|parser-v' + LEGACY_IMPORT_CACHE_VERSION;
 }
 
 function legacyPhaseForSheetName_(sheetName) {
@@ -125,6 +150,7 @@ function extractLegacyPerformancesFromSheet_(sheet, source, clientIndex, issues)
 
   const range = sheet.getDataRange();
   const displayValues = range.getDisplayValues();
+  const rawValues = range.getValues();
   const results = [];
 
   displayValues.forEach((row, rowIndex) => {
@@ -132,9 +158,11 @@ function extractLegacyPerformancesFromSheet_(sheet, source, clientIndex, issues)
       if (normalizeMatchText_(cellValue) !== 'forma jednani') return;
 
       const valueRow = displayValues[rowIndex + 1] || [];
+      const rawValueRow = rawValues[rowIndex + 1] || [];
       const timeRow = displayValues[rowIndex + 3] || [];
       const meetingForm = normalizeText_(valueRow[columnIndex]);
-      const rawDate = valueRow[columnIndex + 1];
+      const rawDate = rawValueRow[columnIndex + 1];
+      const displayDate = valueRow[columnIndex + 1];
       const place = normalizeText_(valueRow[columnIndex + 2]);
       const startTime = normalizeLegacyTime_(timeRow[columnIndex]);
       const endTime = normalizeLegacyTime_(timeRow[columnIndex + 1]);
@@ -168,10 +196,11 @@ function extractLegacyPerformancesFromSheet_(sheet, source, clientIndex, issues)
         ? stripLegacyNoteLabel_((displayValues[noteRowIndex] || [])[columnIndex])
         : '';
       const hasAnyContent = Boolean(
-        rawDate || meetingForm || place || startTime || endTime || activityCodes.length || note
+        rawDate || displayDate || meetingForm || place || startTime || endTime ||
+        activityCodes.length || note
       );
       if (!hasAnyContent) return;
-      if (!rawDate || !startTime || !endTime || !activityCodes.length) {
+      if ((!rawDate && !displayDate) || !startTime || !endTime || !activityCodes.length) {
         issues.push(
           'Neúplný výkon v souboru ' + source.fileName +
           ', list ' + sheet.getName() + ', buňka ' +
@@ -180,7 +209,7 @@ function extractLegacyPerformancesFromSheet_(sheet, source, clientIndex, issues)
         return;
       }
 
-      const date = normalizeIsoDate_(rawDate);
+      const date = normalizeLegacyDateValue_(rawDate, displayDate, source.timeZone);
       const durationMinutes = calculateDurationMinutes_(startTime, endTime, '');
       const anchor = sheet.getRange(rowIndex + 1, columnIndex + 1).getA1Notation();
       const performanceId = buildLegacyPerformanceStableId_(
@@ -249,7 +278,8 @@ function extractLegacyWorkbookPerformances_(file, clientIndex) {
     const source = {
       fileId: file.getId(),
       fileName: file.getName(),
-      modifiedAt: file.getLastUpdated().toISOString()
+      modifiedAt: file.getLastUpdated().toISOString(),
+      timeZone: spreadsheet.getSpreadsheetTimeZone()
     };
     const issues = [];
     const performances = spreadsheet.getSheets().flatMap((sheet) =>
@@ -434,6 +464,7 @@ function syncLegacyPerformances_(context, options) {
     if (projectFilter && clientIndex.project_id !== projectFilter) return;
 
     const modifiedAt = source.file.getLastUpdated().toISOString();
+    const cacheSourceVersion = legacyImportCacheSourceVersion_(modifiedAt);
     const cache = cacheByFileId[fileId];
     const mappingIsCurrent = legacySourceMappingIsCurrent_(
       existingPerformances,
@@ -446,7 +477,7 @@ function syncLegacyPerformances_(context, options) {
       !force &&
       cache &&
       ['OK', 'PARTIAL'].includes(String(cache.status || '').toUpperCase()) &&
-      String(cache.source_modified_at || '') === modifiedAt &&
+      String(cache.source_modified_at || '') === cacheSourceVersion &&
       mappingIsCurrent
     ) {
       summary.skippedUnchangedFiles += 1;
@@ -478,7 +509,7 @@ function syncLegacyPerformances_(context, options) {
             legacy_file_id: fileId,
             legacy_file_name: source.file.getName(),
             client_number: source.clientNumber,
-            source_modified_at: modifiedAt,
+            source_modified_at: cacheSourceVersion,
             last_imported_at: nowIso_(),
             status: extracted.issues.length ? 'PARTIAL' : 'OK',
             performance_count: performances.length,
@@ -502,7 +533,7 @@ function syncLegacyPerformances_(context, options) {
             legacy_file_id: fileId,
             legacy_file_name: source.file.getName(),
             client_number: source.clientNumber,
-            source_modified_at: modifiedAt,
+            source_modified_at: cacheSourceVersion,
             last_imported_at: nowIso_(),
             status: 'ERROR',
             performance_count: 0,
@@ -572,6 +603,20 @@ function runLegacyPerformanceSyncWithLock_(context, options) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function runLegacyPerformanceDateRepairFromStart() {
+  const context = {
+    actorId: 'SYSTEM',
+    displayName: 'Oprava historických dat',
+    role: 'SYSTEM',
+    projectId: ''
+  };
+  return runLegacyPerformanceSyncWithLock_(context, {
+    offset: 0,
+    batchSize: 12,
+    force: true
+  });
 }
 
 function auditLegacyPerformanceImport() {

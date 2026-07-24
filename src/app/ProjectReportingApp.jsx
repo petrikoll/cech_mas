@@ -38,7 +38,6 @@ import {
   TrendingUp,
   User,
   Users,
-  Workflow,
   Brain,
   Printer
 } from 'lucide-react';
@@ -57,7 +56,6 @@ import {
   CLIENT_EDUCATION_OPTIONS,
   CLIENT_DISADVANTAGE_OPTIONS,
   CLIENT_STATUS_OPTIONS,
-  YES_NO_OPTIONS,
   KU_SUPPORT_DEFAULT_CODE,
   emptyClientDraft,
   emptyFilters,
@@ -65,7 +63,6 @@ import {
 } from '../config/projectConfig.js';
 import { HELP } from '../config/helpCatalog.js';
 import {
-  CheckboxField,
   CompactMetric,
   DetailRow,
   EmptyState,
@@ -84,6 +81,13 @@ import {
 import { appId, auth, db, hasFirebaseConfig } from '../lib/firebase.js';
 import { parseAiJson, redactClientIdentifiers, sanitizeAiInput, validatePlanOutput, validateRecordOutput } from '../lib/aiSafety.js';
 import { buildClientCaseAiPrompt, filterClientCaseAiRecords } from '../lib/clientCaseSummary.js';
+import {
+  KA1_NOTE_AI_MODEL,
+  KA1_NOTE_RESPONSE_SCHEMA,
+  KA1_NOTE_SYSTEM_PROMPT,
+  buildKa1NoteUserPrompt,
+  validateKa1NoteAiResult
+} from '../lib/ka1NoteAi.js';
 import { buildHorizontalPrinciplesAiPrompt, buildHorizontalPrinciplesFallbackText, buildZorTexts } from '../lib/zorSummary.js';
 import {
   buildLegacyPerformanceDetail,
@@ -743,7 +747,6 @@ function buildGoalDeadlineAlerts({ clients = [], records = [], warningDays = GOA
       const item = {
         clientId,
         clientName: client?.fullName || planRecord.clientName || clientId,
-        keyWorker: client?.keyWorker || '',
         goalLabel: truncate(getGoalDescription(goal, index), 90),
         deadline: new Date(deadlineTime).toISOString().slice(0, 10),
         daysUntil
@@ -1747,8 +1750,7 @@ function normalizeClientDateForSheet(value) {
 }
 
 function mapClientDraftToSheetClient(draft, klientId = '', fallbackProjectId = '') {
-  const caseManagementDisabled = handlesCaseManagementDirectly(draft.keyWorker);
-  const caseManagementPotreba = caseManagementDisabled ? 'Ne' : draft.caseManagementPotreba || 'Ne';
+  const caseManagementPotreba = draft.caseManagementPotreba || 'Ne';
   return {
     klient_id: klientId,
     project_id: draft.projectId || fallbackProjectId,
@@ -1786,29 +1788,20 @@ const optionItems = (values, placeholder) => [
   ...values.map((value) => ({ value, label: value }))
 ];
 
-const normalizeWorkerRole = (value) =>
-  String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+const isGarantWorker = (value) =>
+  String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase().includes('garant');
 
-const isCaseManagerWorker = (value) => normalizeWorkerRole(value).includes('case manager');
-const isGarantWorker = (value) => normalizeWorkerRole(value).includes('garant');
-const handlesCaseManagementDirectly = (value) => isCaseManagerWorker(value) || isGarantWorker(value);
-const hasCaseManagementNeed = (client) => String(client?.caseManagementPotreba || '').trim().toLowerCase() === 'ano';
+const formatClientShortId = (client) => {
+  const clientNumber = String(client?.clientNumber || '').trim();
+  if (clientNumber) return clientNumber;
+  const technicalId = String(client?.id || '').replace(/^client-/i, '').trim();
+  const numericPart = technicalId.match(/\d+/g)?.at(-1) || '';
+  if (numericPart) return numericPart.slice(-6);
+  return technicalId.length > 6 ? technicalId.slice(-6).toUpperCase() : technicalId || '—';
+};
 
 function ClientRegistrationFields({ draft, setDraft, compact = false }) {
-  const caseManagementDisabled = handlesCaseManagementDirectly(draft.keyWorker);
-  const caseManagementValue = caseManagementDisabled ? 'Ne' : draft.caseManagementPotreba;
-  const update = (key, value) => setDraft((previous) => {
-    if (key === 'keyWorker' && handlesCaseManagementDirectly(value)) {
-      return {
-        ...previous,
-        keyWorker: value,
-        caseManagementPotreba: 'Ne',
-        caseManagementDuvod: '',
-        caseManagementOd: ''
-      };
-    }
-    return { ...previous, [key]: value };
-  });
+  const update = (key, value) => setDraft((previous) => ({ ...previous, [key]: value }));
 
   if (compact) {
     const sectionTitle = 'text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500';
@@ -1849,20 +1842,9 @@ function ClientRegistrationFields({ draft, setDraft, compact = false }) {
         <div className={sectionBox}>
           <div className={sectionTitle}>Zařazení v projektu</div>
           <SelectField label="Stav klienta" help={HELP.clientsStatus} value={draft.stavKlienta} onChange={(value) => update('stavKlienta', value)} options={optionItems(CLIENT_STATUS_OPTIONS, 'Vyberte stav')} />
-          <SelectField label="Klíčový pracovník" value={draft.keyWorker} onChange={(value) => update('keyWorker', value)} options={optionItems(WORKERS, 'Vyberte pracovníka')} />
           <InputField label="Datum vstupu do projektu" help={HELP.clientsEntryDate} type="date" value={draft.datumVstupu} onChange={(value) => update('datumVstupu', value)} />
           <InputField label="Datum výstupu z projektu" help={HELP.clientsExitDate} type="date" value={draft.datumVystupu} onChange={(value) => update('datumVystupu', value)} />
-          <SelectField label="Potřeba case managementu" help={HELP.clientsCaseNeed} value={caseManagementValue} disabled={caseManagementDisabled} onChange={(value) => update('caseManagementPotreba', value)} options={optionItems(YES_NO_OPTIONS, 'Vyberte odpověď')} />
-          {caseManagementValue === 'Ano' && (
-            <>
-              <InputField label="Case management od" help={HELP.clientsCaseSince} type="date" value={draft.caseManagementOd} onChange={(value) => update('caseManagementOd', value)} />
-              <TextAreaField label="Důvod case managementu" help={HELP.clientsCaseReason} value={draft.caseManagementDuvod} onChange={(value) => update('caseManagementDuvod', value)} rows={2} />
-            </>
-          )}
-          <div className="grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
-            <TextAreaField label="Poznámka" help={HELP.clientsNote} value={draft.poznamka} onChange={(value) => update('poznamka', value)} rows={2} />
-            <CheckboxField label="Rodina" checked={Boolean(draft.rodina)} onChange={(value) => update('rodina', value)} compact />
-          </div>
+          <TextAreaField label="Poznámka" help={HELP.clientsNote} value={draft.poznamka} onChange={(value) => update('poznamka', value)} rows={2} />
         </div>
       </div>
     );
@@ -1892,25 +1874,14 @@ function ClientRegistrationFields({ draft, setDraft, compact = false }) {
         <SelectField label="Dosažené vzdělání" help={HELP.clientsEducation} value={draft.vzdelani} onChange={(value) => update('vzdelani', value)} options={optionItems(CLIENT_EDUCATION_OPTIONS, 'Vyberte vzdělání')} />
         <SelectField label="Typ znevýhodnění" help={HELP.clientsDisadvantage} value={draft.znevyhodneni} onChange={(value) => update('znevyhodneni', value)} options={optionItems(CLIENT_DISADVANTAGE_OPTIONS, 'Vyberte znevýhodnění')} />
         <SelectField label="Stav klienta" help={HELP.clientsStatus} value={draft.stavKlienta} onChange={(value) => update('stavKlienta', value)} options={optionItems(CLIENT_STATUS_OPTIONS, 'Vyberte stav')} />
-        <SelectField label="Klíčový pracovník" value={draft.keyWorker} onChange={(value) => update('keyWorker', value)} options={optionItems(WORKERS, 'Vyberte pracovníka')} />
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2">
         <InputField label="Datum vstupu do projektu" help={HELP.clientsEntryDate} type="date" value={draft.datumVstupu} onChange={(value) => update('datumVstupu', value)} />
         <InputField label="Datum výstupu z projektu" help={HELP.clientsExitDate} type="date" value={draft.datumVystupu} onChange={(value) => update('datumVystupu', value)} />
-        <SelectField label="Potřeba case managementu" help={HELP.clientsCaseNeed} value={caseManagementValue} disabled={caseManagementDisabled} onChange={(value) => update('caseManagementPotreba', value)} options={optionItems(YES_NO_OPTIONS, 'Vyberte odpověď')} />
-        {caseManagementValue === 'Ano' && (
-          <InputField label="Case management od" help={HELP.clientsCaseSince} type="date" value={draft.caseManagementOd} onChange={(value) => update('caseManagementOd', value)} />
-        )}
       </div>
 
-      {caseManagementValue === 'Ano' && (
-        <TextAreaField label="Důvod case managementu" help={HELP.clientsCaseReason} value={draft.caseManagementDuvod} onChange={(value) => update('caseManagementDuvod', value)} rows={2} />
-      )}
-      <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-        <TextAreaField label="Poznámka" help={HELP.clientsNote} value={draft.poznamka} onChange={(value) => update('poznamka', value)} rows={2} />
-        <CheckboxField label="Rodina" checked={Boolean(draft.rodina)} onChange={(value) => update('rodina', value)} compact />
-      </div>
+      <TextAreaField label="Poznámka" help={HELP.clientsNote} value={draft.poznamka} onChange={(value) => update('poznamka', value)} rows={2} />
     </div>
   );
 }
@@ -2142,7 +2113,6 @@ function App() {
   const { activeProjectId, activeProject, setActiveProjectId } = useProject();
   const [mainView, setMainView] = useState('clients');
   const [searchQuery, setSearchQuery] = useState('');
-  const [showAllClients, setShowAllClients] = useState(true);
   const [user, setUser] = useState(null);
   const [records, setRecords] = useState([]);
   const [clients, setClients] = useState([]);
@@ -2587,10 +2557,7 @@ function App() {
   const canSeeAllClients = isGarantWorker(currentWorker);
   const accessibleClients = useMemo(() => projectClients, [projectClients]);
 
-  const clientSelectionPool = useMemo(() => {
-    if (mainView === 'clients' && showAllClients) return projectClients;
-    return accessibleClients;
-  }, [mainView, showAllClients, projectClients, accessibleClients]);
+  const clientSelectionPool = accessibleClients;
 
   const selectedClient = selectedClientId ?clientIndex[selectedClientId] : null;
 
@@ -2603,6 +2570,46 @@ function App() {
     () => [...goalDeadlineAlerts.overdue, ...goalDeadlineAlerts.approaching].slice(0, 3),
     [goalDeadlineAlerts]
   );
+
+  const generateKa1PerformanceNote = async ({ draft, selectedClient: client, selectedPhase, records: timelineRecords }) => {
+    const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
+    if (!apiKey) {
+      throw new Error('Gemini API klíč není nastavený. AI návrh nyní nelze vytvořit.');
+    }
+
+    const userPrompt = redactClientIdentifiers(
+      buildKa1NoteUserPrompt({
+        draft: sanitizeAiInput(draft),
+        phase: sanitizeAiInput(selectedPhase),
+        records: sanitizeAiInput(timelineRecords),
+        clientId: client?.id || ''
+      }),
+      client
+    );
+    const response = await fetchGemini(
+      `https://generativelanguage.googleapis.com/v1beta/models/${KA1_NOTE_AI_MODEL}:generateContent?key=${apiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: KA1_NOTE_SYSTEM_PROMPT }] },
+          contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            maxOutputTokens: 5000,
+            responseMimeType: 'application/json',
+            responseSchema: KA1_NOTE_RESPONSE_SCHEMA
+          }
+        })
+      }
+    );
+    const responseBody = await response.json();
+    if (!response.ok) {
+      throw new Error(responseBody?.error?.message || `AI požadavek selhal se stavem ${response.status}.`);
+    }
+    const parsed = parseAiJson(extractGeminiText(responseBody));
+    return validateKa1NoteAiResult(parsed);
+  };
 
   const hasUnsavedFormContent = () =>
     (showClientForm && hasContentInFields(clientDraft, CLIENT_DRAFT_CONTENT_FIELDS)) ||
@@ -2619,7 +2626,7 @@ function App() {
     const nextWorker = currentWorker || WORKERS[0];
 
     setShowClientForm(false);
-    setClientDraft({ ...emptyClientDraft, datumVstupu: todayIso(), keyWorker: isGarantWorker(nextWorker) ? '' : nextWorker });
+    setClientDraft({ ...emptyClientDraft, datumVstupu: todayIso() });
     setShowClientEditForm(false);
     setClientEditDraft(emptyClientDraft);
     setGeneratorDraft({
@@ -2764,11 +2771,10 @@ function App() {
         .toLowerCase()
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '');
-    const baseClients = showAllClients ? projectClients : accessibleClients;
     const term = normalizeSearchValue(searchQuery);
-    if (!term) return baseClients;
-    return baseClients.filter((client) => normalizeSearchValue(client.prijmeni).includes(term));
-  }, [projectClients, accessibleClients, searchQuery, showAllClients]);
+    if (!term) return accessibleClients;
+    return accessibleClients.filter((client) => normalizeSearchValue(client.prijmeni).includes(term));
+  }, [accessibleClients, searchQuery]);
 
   const computedIndicators = useMemo(() => {
     return buildIndicators({
@@ -4142,8 +4148,7 @@ function App() {
     const clientToSave = {
       ...clientDraft,
       projectId: activeProjectId,
-      sourceSystem: 'NEW_APP',
-      keyWorker: clientDraft.keyWorker || currentWorker
+      sourceSystem: 'NEW_APP'
     };
 
     const duplicateClient = findDuplicateClient(clientToSave);
@@ -4177,7 +4182,7 @@ function App() {
 
       setClients((prev) => [savedClient, ...prev.filter((client) => client.id !== savedClient.id)]);
       setSelectedClientId(savedClient.id);
-      setClientDraft({ ...emptyClientDraft, datumVstupu: todayIso(), keyWorker: isGarantWorker(currentWorker) ? '' : currentWorker });
+      setClientDraft({ ...emptyClientDraft, datumVstupu: todayIso() });
       setSheetError('');
       setSaveButtonNotice('client-create', 'success', 'Klient uložen');
       setFlash('Klient uložen');
@@ -4200,43 +4205,6 @@ function App() {
       ...selectedClient
     });
     setShowClientEditForm(true);
-  };
-
-  const handleClientKeyWorkerQuickChange = async (client, nextKeyWorker) => {
-    if (!client) return;
-    if (!isClientRegistryAvailable) {
-      setFlash('Klientský registr není dostupný. Změna pracovníka byla zablokována.');
-      return;
-    }
-    const normalizedNextKeyWorker = String(nextKeyWorker || '').trim();
-    if ((client.keyWorker || '') === normalizedNextKeyWorker) return;
-
-    setIsSaving(true);
-    try {
-      const result = await postGoogleSheetAction({
-        action: 'saveClient',
-        client: mapClientDraftToSheetClient({
-          ...emptyClientDraft,
-          ...client,
-          keyWorker: normalizedNextKeyWorker
-        }, client.id, client.projectId || activeProjectId)
-      });
-      if (!result?.client?.klient_id) throw new Error('Google Sheet nevrátil ID klienta.');
-      const savedClient = mapSheetRowToClient(result.client, clients.findIndex((item) => item.id === client.id));
-      if (!savedClient) throw new Error('Upraveného klienta se nepodařilo načíst.');
-
-      setClients((prev) => prev.map((item) => (item.id === client.id ? savedClient : item)));
-      if (selectedClientId === client.id) {
-        setClientEditDraft((prev) => ({ ...prev, keyWorker: savedClient.keyWorker || '' }));
-      }
-      setSheetError('');
-      setFlash('Klíčový pracovník byl uložen.');
-    } catch (error) {
-      console.error('Google Sheets client key worker update error:', error);
-      setFlash(saveErrorMessage('Klíčový pracovník nebyl uložen', error));
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const handleClientUpdate = async () => {
@@ -5808,7 +5776,6 @@ ${rawOutput}` }] }],
         client.vzdelani || '',
         client.znevyhodneni || '',
         client.projectStatusLabel || '',
-        client.keyWorker || '',
         client.datumVstupu || '',
         client.datumVystupu || '',
         stats.supportCount,
@@ -5830,7 +5797,6 @@ ${rawOutput}` }] }],
         'Dosažené vzdělání',
         'Typ znevýhodnění',
         'Status klienta',
-        'Klíčový pracovník',
         'Datum vstupu',
         'Datum výstupu',
         'Počet zápisů podpory',
@@ -6656,7 +6622,7 @@ ${rawPlanOutput}` }] }],
         )}
 
         {mainView === 'clients' && (
-          <div className="grid gap-4 lg:grid-cols-[330px_minmax(0,1fr)]">
+          <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
             <div className="space-y-3">
               <Panel
                 title="Klientský registr"
@@ -6666,7 +6632,6 @@ ${rawPlanOutput}` }] }],
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => {
-                        setClientDraft((prev) => ({ ...prev, keyWorker: prev.keyWorker || (isGarantWorker(currentWorker) ? '' : currentWorker) }));
                         clearSaveButtonNotice('client-create');
                         setShowClientForm((prev) => !prev);
                       }}
@@ -6678,18 +6643,6 @@ ${rawPlanOutput}` }] }],
                   </div>
                 }
               >
-                <div className="mb-3 flex items-center gap-2">
-                  <input
-                    id="show-all-clients"
-                    type="checkbox"
-                    checked={showAllClients}
-                    onChange={(event) => setShowAllClients(event.target.checked)}
-                    className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
-                  />
-                  <label htmlFor="show-all-clients" className="text-sm font-semibold text-slate-700">
-                    Zobraz všechny klienty
-                  </label>
-                </div>
                 <div className="mb-3">
                   <div className="relative">
                     <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
@@ -6726,14 +6679,11 @@ ${rawPlanOutput}` }] }],
                   ) : (
                     filteredClientList.length === 0 ? (
                       <div className="rounded-xl border border-slate-200 bg-white px-3 py-4 text-sm text-slate-500">
-                        {canSeeAllClients
-                          ? 'Žádný klient neodpovídá vyhledávání.'
-                          : `Pro pozici ${currentWorker} není přiřazen žádný klient.`}
+                        Žádný klient neodpovídá vyhledávání.
                       </div>
                     ) : filteredClientList.map((client) => {
                       const stats = getClientStats(client.id, records);
                       const active = client.id === selectedClientId;
-                      const showCaseManagementBadge = hasCaseManagementNeed(client) && !handlesCaseManagementDirectly(client.keyWorker);
                       return (
                         <div
                           key={client.id}
@@ -6759,30 +6709,8 @@ ${rawPlanOutput}` }] }],
                             <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
                           </div>
                           <div className="mt-1.5 grid grid-cols-2 gap-1.5 text-xs">
-                            {client.rodina
-                              ? <MiniBadge icon={Users} label="Rodina" tone="emerald" />
-                              : <MiniBadge icon={Database} label={`ID ${client.id}`} tone="slate" />}
-                            <label
-                              className="flex min-w-0 items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-indigo-700"
-                              onClick={(event) => event.stopPropagation()}
-                            >
-                              <User className="h-3.5 w-3.5 shrink-0" />
-                              <select
-                                value={client.keyWorker || ''}
-                                onChange={(event) => handleClientKeyWorkerQuickChange(client, event.target.value)}
-                                onClick={(event) => event.stopPropagation()}
-                                disabled={isSaving}
-                                className="min-w-0 flex-1 bg-transparent text-xs font-semibold outline-none"
-                                aria-label={`Klíčový pracovník klienta ${client.fullName}`}
-                              >
-                                <option value="">Bez klíč. prac.</option>
-                                {WORKERS.map((worker) => (
-                                  <option key={worker} value={worker}>{worker}</option>
-                                ))}
-                              </select>
-                            </label>
+                            <MiniBadge icon={Database} label={`ID ${formatClientShortId(client)}`} tone="slate" />
                             <MiniBadge icon={Clock} label={formatSupportMinutes(stats.supportMinutes)} tone="indigo" />
-                            {showCaseManagementBadge && <MiniBadge icon={User} label="case" tone="emerald" />}
                           </div>
                         </div>
                       );
@@ -6877,7 +6805,6 @@ ${rawPlanOutput}` }] }],
                         {[
                           { key: 'address', icon: MapPin, label: 'Adresa', value: buildAddress(selectedClient) },
                           { key: 'contact', icon: Phone, label: 'Kontakt', value: selectedClient.telefon || selectedClient.email || 'Neuvedeno' },
-                          { key: 'case-management', icon: Workflow, label: 'Klient case managementu', value: hasCaseManagementNeed(selectedClient) ? 'ANO' : 'NE' },
                           { key: 'edu', icon: GraduationCap, label: 'Vzdělání', value: selectedClient.vzdelani || 'Neuvedeno' },
                           { key: 'job', icon: Briefcase, label: 'Postavení na trhu práce', value: selectedClient.postaveniNaTrhu || 'Neuvedeno' },
                           { key: 'disadv', icon: AlertCircle, label: 'Znevýhodnění', value: selectedClient.znevyhodneni || 'Neuvedeno' }
@@ -6895,9 +6822,8 @@ ${rawPlanOutput}` }] }],
                       <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
                         <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Projektový stav</div>
                         <div className="mt-1.5 space-y-0.5 text-sm">
-                          <DetailRow label="Interní ID" value={selectedClient.id} />
+                          <DetailRow label="ID klienta" value={formatClientShortId(selectedClient)} />
                           <DetailRow label="Status klienta" value={selectedClient.projectStatusLabel} />
-                          <DetailRow label="Klíčový pracovník" value={selectedClient.keyWorker || 'Neuvedeno'} />
                           <DetailRow label="Datum vstupu" value={selectedClient.datumVstupu || 'Neuvedeno'} />
                           <DetailRow label="Datum výstupu" value={selectedClient.datumVystupu || 'Neuvedeno'} />
                           <DetailRow label="Situace po ukončení" value={selectedClient.situacePoUkonceni || 'Neuvedeno'} />
@@ -7458,6 +7384,7 @@ ${rawPlanOutput}` }] }],
               computedIndicators={computedIndicators}
               currentWorker={currentWorker}
               isSaving={isSaving}
+              onGenerateAiNote={generateKa1PerformanceNote}
             />
           </React.Suspense>
         )}

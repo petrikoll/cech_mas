@@ -6,6 +6,10 @@ const appSource = readFileSync(
   new URL('../src/app/ProjectReportingApp.jsx', import.meta.url),
   'utf8'
 );
+const ka1PerformanceSource = readFileSync(
+  new URL('../src/app/Ka02View.jsx', import.meta.url),
+  'utf8'
+);
 
 test('formulář výkonů KA1 používá existující stav ukládání', () => {
   assert.doesNotMatch(appSource, /isSaving=\{saving\}/);
@@ -24,4 +28,19 @@ test('historical XLSM performances are read-only in the client timeline', () => 
   assert.match(appSource, /buildLegacyPerformanceSummary\(record\)/);
   assert.match(appSource, /buildLegacyPerformanceDetail\(record\)/);
   assert.match(appSource, /normalizePerformanceTime\(row\.cas_od \|\| row\.start_time\)/);
+});
+
+test('registr klientů neobsahuje zrušené ovládací prvky', () => {
+  assert.doesNotMatch(appSource, /Zobraz všechny klienty/);
+  assert.doesNotMatch(appSource, /label="Klíčový pracovník"/);
+  assert.doesNotMatch(appSource, /label="Potřeba case managementu"/);
+  assert.doesNotMatch(appSource, /label="Rodina"/);
+  assert.match(appSource, /label=\{`ID \$\{formatClientShortId\(client\)\}`\}/);
+});
+
+test('výkon KA1 nabízí AI návrh s kontrolou klientské osy', () => {
+  assert.match(appSource, /onGenerateAiNote=\{generateKa1PerformanceNote\}/);
+  assert.match(ka1PerformanceSource, /Vygenerovat návrh/);
+  assert.match(ka1PerformanceSource, /Kontrola návrhu proti klientské ose/);
+  assert.match(ka1PerformanceSource, /Gemini 2\.5 Flash/);
 });

@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, Clock, History, Save, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock, History, Loader2, Save, Sparkles, UserRound } from 'lucide-react';
 import { KA1_PHASES } from '../config/ka1Catalog.js';
 import { EmptyState, Panel } from '../components/ui.jsx';
 
@@ -39,9 +39,12 @@ function Ka02View({
   ka02Draft,
   setKa02Draft,
   currentWorker,
-  isSaving
+  isSaving,
+  onGenerateAiNote
 }) {
   const [formError, setFormError] = React.useState('');
+  const [isGeneratingAiNote, setIsGeneratingAiNote] = React.useState(false);
+  const [aiReview, setAiReview] = React.useState(null);
   const selectedClient = clients.find((client) => client.id === ka02Draft.selectedClientId) || null;
   const selectedPhase = KA1_PHASES.find((phase) => phase.code === ka02Draft.phaseCode) || KA1_PHASES[0];
   const durationMinutes = durationFromDraft(ka02Draft);
@@ -50,6 +53,7 @@ function Ka02View({
   const update = (key, value) => {
     setKa02Draft((previous) => ({ ...previous, [key]: value }));
     setFormError('');
+    setAiReview(null);
   };
 
   const changePhase = (phaseCode) => {
@@ -59,6 +63,7 @@ function Ka02View({
       activityCodes: []
     }));
     setFormError('');
+    setAiReview(null);
   };
 
   const toggleActivity = (code) => {
@@ -72,6 +77,43 @@ function Ka02View({
       };
     });
     setFormError('');
+    setAiReview(null);
+  };
+
+  const generateAiNote = async () => {
+    if (!selectedClient) {
+      setFormError('Vyberte klienta.');
+      return;
+    }
+    if (!activityCodes.length) {
+      setFormError('Vyberte alespoň jednu činnost.');
+      return;
+    }
+    if (!String(ka02Draft.caseNote || '').trim()) {
+      setFormError('Nejprve napište pracovní poznámky, ze kterých má AI vytvořit návrh.');
+      return;
+    }
+    if (typeof onGenerateAiNote !== 'function') {
+      setFormError('AI návrh nyní není dostupný.');
+      return;
+    }
+
+    setFormError('');
+    setIsGeneratingAiNote(true);
+    try {
+      const result = await onGenerateAiNote({
+        draft: ka02Draft,
+        selectedClient,
+        selectedPhase,
+        records
+      });
+      update('caseNote', result.formattedOutput);
+      setAiReview(result);
+    } catch (error) {
+      setFormError(error?.message || 'AI návrh se nepodařilo vytvořit.');
+    } finally {
+      setIsGeneratingAiNote(false);
+    }
   };
 
   const savePerformance = async () => {
@@ -140,6 +182,7 @@ function Ka02View({
         endTime: '',
         caseNote: ''
       }));
+      setAiReview(null);
     }
   };
 
@@ -318,6 +361,21 @@ function Ka02View({
           </Panel>
 
           <Panel title="Zápis z jednání" icon={Save}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2.5">
+              <div>
+                <div className="text-sm font-bold text-violet-950">AI návrh a kontrola návaznosti</div>
+                <div className="text-xs text-violet-700">Gemini 2.5 Flash porovná návrh s předchozí klientskou osou. Výsledek se neuloží automaticky.</div>
+              </div>
+              <button
+                type="button"
+                onClick={generateAiNote}
+                disabled={isGeneratingAiNote || isSaving}
+                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-extrabold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-wait disabled:opacity-60"
+              >
+                {isGeneratingAiNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                {isGeneratingAiNote ? 'Generuji…' : 'Vygenerovat návrh'}
+              </button>
+            </div>
             <label className="block">
               <FieldLabel required>Průběh, výsledek a další krok</FieldLabel>
               <textarea
@@ -328,6 +386,34 @@ function Ka02View({
                 className="w-full rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm leading-relaxed outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               />
             </label>
+
+            {aiReview ? (
+              <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <div className="flex items-center gap-2 text-sm font-bold text-amber-950">
+                  <AlertCircle className="h-4 w-4" />
+                  Kontrola návrhu proti klientské ose
+                </div>
+                {[
+                  ['Kontrola návaznosti', aiReview.qualityCheck],
+                  ['Doporučení', aiReview.recommendations],
+                  ['Chybějící informace', aiReview.missingInformation],
+                  ['Jazykové poznámky', aiReview.languageSuggestions]
+                ].filter(([, items]) => items?.length).map(([label, items]) => (
+                  <div key={label} className="mt-2">
+                    <div className="text-xs font-bold uppercase tracking-wide text-amber-800">{label}</div>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-amber-950">
+                      {items.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                ))}
+                {!aiReview.qualityCheck?.length &&
+                 !aiReview.recommendations?.length &&
+                 !aiReview.missingInformation?.length &&
+                 !aiReview.languageSuggestions?.length ? (
+                  <div className="mt-2 text-sm text-amber-900">AI nezjistila podstatný problém v návaznosti zápisu.</div>
+                ) : null}
+              </div>
+            ) : null}
 
             {formError ? (
               <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
