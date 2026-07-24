@@ -233,7 +233,10 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
   }
 
   const result = input.result && typeof input.result === 'object' ? input.result : {};
-  const caseStudy = normalizeText_(result.case_study).slice(0, 45000);
+  const caseStudy = String(result.case_study || '')
+    .replace(/\r\n?/g, '\n')
+    .trim()
+    .slice(0, 45000);
   const summary = Object.assign({}, result);
   delete summary.case_study;
   let resultJson = JSON.stringify(summary);
