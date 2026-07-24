@@ -4857,7 +4857,12 @@ function App() {
       if (job.status !== 'completed' || !job.result) {
         throw new Error(job.error || 'AI úloha nebyla dokončena.');
       }
-      const completedAnalysis = job.result;
+      const completedAnalysis = {
+        ...job.result,
+        document_ids: mode === 'case-study' && contextDocuments.length
+          ? [...new Set(contextDocuments.map((document) => String(document.document_id || '')).filter(Boolean))]
+          : job.result.document_ids
+      };
       const saved = await postGoogleSheetAction({
         action: 'saveInsolvencyAnalysis',
         analysis: completedAnalysis
@@ -4937,13 +4942,7 @@ function App() {
         .sort((left, right) => String(left.event_date || '').localeCompare(String(right.event_date || '')));
       const hasCaseStudy = Boolean(String(caseItem.ai_case_study || '').trim());
       const newRelevantDocuments = newDocuments.filter(isCaseStudyRelevantDocument);
-      const deadlineWasLeftUnverified = Boolean(
-        workingCase.claims_deadline
-        && /lhůt[a-zá-ž\s]*přihl[a-zá-ž\s]*není\s+bezpečně\s+ověř/iu.test(
-          String(caseItem.ai_case_study || '')
-        )
-      );
-      if (hasCaseStudy && !newRelevantDocuments.length && !deadlineWasLeftUnverified) continue;
+      if (hasCaseStudy && !newRelevantDocuments.length) continue;
       if (!allCaseDocuments.length) continue;
 
       try {
