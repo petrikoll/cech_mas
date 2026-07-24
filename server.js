@@ -11,6 +11,7 @@ import { handleIsirRequest } from './isirService.js';
 import { handleIsirAnalysisRequest } from './isirAnalysis.js';
 import { handleIsirAiQueueRequest } from './isirAiQueueEndpoint.js';
 import { handleIsirDocumentRequest } from './isirDocumentProxy.js';
+import documentCreatorApp from './document-creator/app.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const distDir = resolve(__dirname, 'dist');
@@ -95,6 +96,13 @@ const server = createServer((request, response) => {
   }
 
   const url = new URL(request.url || '/', `http://${request.headers.host}`);
+
+  if (url.pathname === '/document-creator' || url.pathname.startsWith('/document-creator/')) {
+    request.url = (request.url || '/').replace(/^\/document-creator(?=\/|\?|$)/, '') || '/';
+    documentCreatorApp(request, response);
+    return;
+  }
+
   const requestedPath = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.[/\\])+/, '');
   const staticPath = join(distDir, requestedPath);
 
@@ -157,3 +165,5 @@ const server = createServer((request, response) => {
 server.listen(port, '0.0.0.0', () => {
   console.log(`Server listening on port ${port}`);
 });
+
+export { server };

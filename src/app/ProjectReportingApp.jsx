@@ -205,6 +205,7 @@ const LEGACY_ISIR_MIGRATION_FILE_IDS = Object.freeze({
 });
 
 const CALCULATOR_URL = 'https://kalkulacka1-3.onrender.com/';
+const DOCUMENT_CREATOR_URL = '/document-creator/';
 
 const AI_TOOL_LINKS = Object.freeze([
   {
@@ -213,13 +214,6 @@ const AI_TOOL_LINKS = Object.freeze([
     url: 'https://chranenebydleni.onrender.com/',
     icon: Users,
     tone: 'from-sky-50 to-white text-sky-700 border-sky-100'
-  },
-  {
-    title: 'Tvorba dokumentů',
-    description: 'Otevře samostatnou aplikaci pro přípravu dokumentů.',
-    url: 'https://dokument-creator.onrender.com/',
-    icon: FileText,
-    tone: 'from-violet-50 to-white text-violet-700 border-violet-100'
   },
   {
     title: 'E.L.A.I. – výplatní pásky',
@@ -1355,6 +1349,12 @@ const VIEW_THEMES = {
     accent: 'bg-amber-100/25',
     label: 'text-amber-700'
   },
+  'document-creator': {
+    page: 'bg-[radial-gradient(circle_at_top_left,#eef2ff_0,#f8faff_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-indigo-100/80 bg-white/90',
+    accent: 'bg-indigo-100/25',
+    label: 'text-indigo-700'
+  },
   'ai-tools': {
     page: 'bg-[radial-gradient(circle_at_top_left,#f5f3ff_0,#fbfaff_34%,#fbfdff_68%,#ffffff_100%)]',
     header: 'border-violet-100/80 bg-white/90',
@@ -1395,6 +1395,10 @@ const NAV_THEMES = {
   calculator: {
     active: 'border-amber-200 bg-amber-50 text-amber-800 shadow-[0_8px_18px_-14px_rgba(217,119,6,0.7)] ring-1 ring-amber-100',
     idle: 'border-transparent bg-transparent text-slate-500 hover:border-amber-100 hover:bg-amber-50/70 hover:text-amber-800'
+  },
+  'document-creator': {
+    active: 'border-indigo-200 bg-indigo-50 text-indigo-800 shadow-[0_8px_18px_-14px_rgba(79,70,229,0.7)] ring-1 ring-indigo-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-indigo-100 hover:bg-indigo-50/70 hover:text-indigo-800'
   },
   'ai-tools': {
     active: 'border-violet-200 bg-violet-50 text-violet-800 shadow-[0_8px_18px_-14px_rgba(124,58,237,0.7)] ring-1 ring-violet-100',
@@ -8738,6 +8742,33 @@ ${rawPlanOutput}` }] }],
               loading="lazy"
               referrerPolicy="strict-origin-when-cross-origin"
               className="h-[calc(100vh-250px)] min-h-[720px] w-full bg-white"
+            />
+          </section>
+        )}
+
+        {mainView === 'document-creator' && (
+          <section className="overflow-hidden rounded-3xl border border-white/90 bg-white/[0.94] shadow-[0_20px_60px_-40px_rgba(15,23,42,0.55)] ring-1 ring-slate-900/[0.08]">
+            <div className="flex flex-col gap-3 border-b border-indigo-100 bg-indigo-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">Tvorba dokumentů</h2>
+                <p className="mt-1 text-xs text-slate-600">Původní portál institucí a generátor listin je plně začleněný do projektového výkaznictví.</p>
+              </div>
+              <a
+                href={DOCUMENT_CREATOR_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 bg-white px-4 py-2.5 text-sm font-bold text-indigo-900 shadow-sm transition hover:bg-indigo-50"
+              >
+                Otevřít samostatně
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+            <iframe
+              src={DOCUMENT_CREATOR_URL}
+              title="Tvorba dokumentů"
+              loading="lazy"
+              referrerPolicy="same-origin"
+              className="h-[calc(100vh-250px)] min-h-[820px] w-full bg-white"
             />
           </section>
         )}

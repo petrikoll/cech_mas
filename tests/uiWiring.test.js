@@ -203,11 +203,10 @@ test('hlavní navigace obsahuje plnohodnotný list ISIR', () => {
   assert.match(appSource, /markIsirDocumentsSeen/);
 });
 
-test('hlavní navigace obsahuje přehled AI pomůcek se čtyřmi externími odkazy', () => {
+test('hlavní navigace obsahuje přehled AI pomůcek se třemi externími odkazy', () => {
   assert.match(configSource, /AI Pom\\u016fcky/);
   assert.match(appSource, /mainView === 'ai-tools'/);
   assert.match(appSource, /https:\/\/chranenebydleni\.onrender\.com\//);
-  assert.match(appSource, /https:\/\/dokument-creator\.onrender\.com\//);
   assert.match(appSource, /https:\/\/portal-040d\.onrender\.com\/elai-payslips\.html/);
   assert.match(appSource, /https:\/\/mapovani\.onrender\.com\//);
   assert.match(appSource, /target="_blank"/);
@@ -220,6 +219,20 @@ test('kalkulačka je samostatný list aplikace s vloženým statickým webem', (
   assert.match(appSource, /src=\{CALCULATOR_URL\}/);
   assert.match(appSource, /title="Kalkulačka 1–3"/);
   assert.match(appSource, /Otevřít samostatně/);
+});
+
+test('tvorba dokumentů je samostatný list s plně integrovanou původní aplikací', () => {
+  const serverSource = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const documentCreatorServer = readFileSync(new URL('../document-creator/app.js', import.meta.url), 'utf8');
+  const documentCreatorClient = readFileSync(new URL('../document-creator/public/app.js', import.meta.url), 'utf8');
+  assert.match(configSource, /id: 'document-creator', name: 'Tvorba dokument\\u016f'/);
+  assert.match(appSource, /const DOCUMENT_CREATOR_URL = '\/document-creator\/'/);
+  assert.match(appSource, /mainView === 'document-creator'/);
+  assert.match(appSource, /src=\{DOCUMENT_CREATOR_URL\}/);
+  assert.match(serverSource, /documentCreatorApp\(request, response\)/);
+  assert.match(documentCreatorServer, /app\.post\("\/api\/generate"/);
+  assert.match(documentCreatorServer, /app\.post\("\/api\/export-docx"/);
+  assert.match(documentCreatorClient, /fetch\('\/document-creator\/api\/contacts'\)/);
 });
 
 test('ISIR zachovává původní práci s PDF bez ručního importu klientů v rozhraní', () => {
