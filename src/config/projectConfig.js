@@ -1,4 +1,4 @@
-import { BarChart3, GraduationCap, Network, Scale, Sparkles, Target, Users, Workflow } from 'lucide-react';
+import { BarChart3, Calculator, GraduationCap, Network, Scale, Sparkles, Target, Users, Workflow } from 'lucide-react';
 
 function todayIso() {
   const now = new Date();
@@ -194,6 +194,7 @@ const APP_VIEWS = [
   { id: 'ka02', name: 'V\u00fdkony KA1', icon: Target, tone: 'emerald' },
   { id: 'dashboard', name: 'Dashboard', icon: BarChart3, tone: 'slate' },
   { id: 'isir', name: 'ISIR', icon: Scale, tone: 'sky' },
+  { id: 'calculator', name: 'Kalkula\u010dka', icon: Calculator, tone: 'amber' },
   { id: 'ai-tools', name: 'AI Pom\u016fcky', icon: Sparkles, tone: 'violet' },
 ];
 

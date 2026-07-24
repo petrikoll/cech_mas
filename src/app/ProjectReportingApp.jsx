@@ -13,6 +13,7 @@ import {
   Database,
   Download,
   DownloadCloud,
+  ExternalLink,
   FileBadge,
   FileSpreadsheet,
   FileText,
@@ -25,7 +26,6 @@ import {
   MessageSquare,
   Pencil,
   Phone,
-  PieChart,
   Plus,
   Presentation,
   Save,
@@ -204,6 +204,8 @@ const LEGACY_ISIR_MIGRATION_FILE_IDS = Object.freeze({
   MAS: '1on8fM59hEIbA6C8EVpY8376nDBtSCTfI'
 });
 
+const CALCULATOR_URL = 'https://kalkulacka1-3.onrender.com/';
+
 const AI_TOOL_LINKS = Object.freeze([
   {
     title: 'Chráněné bydlení',
@@ -225,13 +227,6 @@ const AI_TOOL_LINKS = Object.freeze([
     url: 'https://portal-040d.onrender.com/elai-payslips.html',
     icon: Brain,
     tone: 'from-emerald-50 to-white text-emerald-700 border-emerald-100'
-  },
-  {
-    title: 'Kalkulačka 1–3',
-    description: 'Otevře samostatnou výpočtovou pomůcku.',
-    url: 'https://kalkulacka1-3.onrender.com/',
-    icon: PieChart,
-    tone: 'from-amber-50 to-white text-amber-700 border-amber-100'
   },
   {
     title: 'Mapování',
@@ -1354,6 +1349,12 @@ const VIEW_THEMES = {
     accent: 'bg-sky-100/25',
     label: 'text-sky-700'
   },
+  calculator: {
+    page: 'bg-[radial-gradient(circle_at_top_left,#fffbeb_0,#fffdf7_34%,#fbfdff_68%,#ffffff_100%)]',
+    header: 'border-amber-100/80 bg-white/90',
+    accent: 'bg-amber-100/25',
+    label: 'text-amber-700'
+  },
   'ai-tools': {
     page: 'bg-[radial-gradient(circle_at_top_left,#f5f3ff_0,#fbfaff_34%,#fbfdff_68%,#ffffff_100%)]',
     header: 'border-violet-100/80 bg-white/90',
@@ -1390,6 +1391,10 @@ const NAV_THEMES = {
   isir: {
     active: 'border-sky-200 bg-sky-50 text-sky-800 shadow-[0_8px_18px_-14px_rgba(2,132,199,0.7)] ring-1 ring-sky-100',
     idle: 'border-transparent bg-transparent text-slate-500 hover:border-sky-100 hover:bg-sky-50/70 hover:text-sky-800'
+  },
+  calculator: {
+    active: 'border-amber-200 bg-amber-50 text-amber-800 shadow-[0_8px_18px_-14px_rgba(217,119,6,0.7)] ring-1 ring-amber-100',
+    idle: 'border-transparent bg-transparent text-slate-500 hover:border-amber-100 hover:bg-amber-50/70 hover:text-amber-800'
   },
   'ai-tools': {
     active: 'border-violet-200 bg-violet-50 text-violet-800 shadow-[0_8px_18px_-14px_rgba(124,58,237,0.7)] ring-1 ring-violet-100',
@@ -8708,6 +8713,33 @@ ${rawPlanOutput}` }] }],
               onEditClient={openClientEditForm}
             />
           </React.Suspense>
+        )}
+
+        {mainView === 'calculator' && (
+          <section className="overflow-hidden rounded-3xl border border-white/90 bg-white/[0.94] shadow-[0_20px_60px_-40px_rgba(15,23,42,0.55)] ring-1 ring-slate-900/[0.08]">
+            <div className="flex flex-col gap-3 border-b border-amber-100 bg-amber-50/70 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">Kalkulačka 1–3</h2>
+                <p className="mt-1 text-xs text-slate-600">Výpočtová pomůcka je otevřená přímo uvnitř projektového výkaznictví.</p>
+              </div>
+              <a
+                href={CALCULATOR_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-4 py-2.5 text-sm font-bold text-amber-900 shadow-sm transition hover:bg-amber-50"
+              >
+                Otevřít samostatně
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </div>
+            <iframe
+              src={CALCULATOR_URL}
+              title="Kalkulačka 1–3"
+              loading="lazy"
+              referrerPolicy="strict-origin-when-cross-origin"
+              className="h-[calc(100vh-250px)] min-h-[720px] w-full bg-white"
+            />
+          </section>
         )}
 
         {mainView === 'ai-tools' && (

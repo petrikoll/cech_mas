@@ -203,15 +203,23 @@ test('hlavní navigace obsahuje plnohodnotný list ISIR', () => {
   assert.match(appSource, /markIsirDocumentsSeen/);
 });
 
-test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy', () => {
+test('hlavní navigace obsahuje přehled AI pomůcek se čtyřmi externími odkazy', () => {
   assert.match(configSource, /AI Pom\\u016fcky/);
   assert.match(appSource, /mainView === 'ai-tools'/);
   assert.match(appSource, /https:\/\/chranenebydleni\.onrender\.com\//);
   assert.match(appSource, /https:\/\/dokument-creator\.onrender\.com\//);
   assert.match(appSource, /https:\/\/portal-040d\.onrender\.com\/elai-payslips\.html/);
-  assert.match(appSource, /https:\/\/kalkulacka1-3\.onrender\.com\//);
   assert.match(appSource, /https:\/\/mapovani\.onrender\.com\//);
   assert.match(appSource, /target="_blank"/);
+});
+
+test('kalkulačka je samostatný list aplikace s vloženým statickým webem', () => {
+  assert.match(configSource, /id: 'calculator', name: 'Kalkula\\u010dka'/);
+  assert.match(appSource, /const CALCULATOR_URL = 'https:\/\/kalkulacka1-3\.onrender\.com\/'/);
+  assert.match(appSource, /mainView === 'calculator'/);
+  assert.match(appSource, /src=\{CALCULATOR_URL\}/);
+  assert.match(appSource, /title="Kalkulačka 1–3"/);
+  assert.match(appSource, /Otevřít samostatně/);
 });
 
 test('ISIR zachovává původní práci s PDF bez ručního importu klientů v rozhraní', () => {
