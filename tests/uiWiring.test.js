@@ -10,6 +10,18 @@ const ka1PerformanceSource = readFileSync(
   new URL('../src/app/Ka02View.jsx', import.meta.url),
   'utf8'
 );
+const paymentCalendarsSource = readFileSync(
+  new URL('../src/app/PaymentCalendarsPanel.jsx', import.meta.url),
+  'utf8'
+);
+const projectSwitcherSource = readFileSync(
+  new URL('../src/components/ProjectSwitcher.jsx', import.meta.url),
+  'utf8'
+);
+const projectsSource = readFileSync(
+  new URL('../src/config/projects.js', import.meta.url),
+  'utf8'
+);
 
 test('formulář výkonů KA1 používá existující stav ukládání', () => {
   assert.doesNotMatch(appSource, /isSaving=\{saving\}/);
@@ -45,6 +57,24 @@ test('výkon KA1 nabízí AI návrh s kontrolou klientské osy', () => {
   assert.match(ka1PerformanceSource, /Gemini 2\.5 Flash/);
 });
 
+test('přehled klienta v KA1 přepíná výkony a splátkové kalendáře', () => {
+  assert.match(ka1PerformanceSource, /Poslední výkony/);
+  assert.match(ka1PerformanceSource, /Splátkové kalendáře/);
+  assert.match(ka1PerformanceSource, /<PaymentCalendarsPanel/);
+  assert.match(paymentCalendarsSource, /Přidat kalendář/);
+  assert.match(paymentCalendarsSource, /record\.entityType === 'payment_plan'/);
+  assert.match(appSource, /fetchAction\('listPaymentPlans'\)/);
+  assert.match(appSource, /action: 'savePaymentPlan'/);
+});
+
+test('poslední výkony zobrazují význam, ne pouze kódy činností', () => {
+  assert.match(ka1PerformanceSource, /KA1_ACTIVITY_TITLE_BY_CODE/);
+  assert.match(ka1PerformanceSource, /preview\.activityTitles\.join/);
+  assert.match(ka1PerformanceSource, /payload\.caseNote/);
+  assert.match(ka1PerformanceSource, /record\.documentText/);
+  assert.match(ka1PerformanceSource, /formatDuration\(record\.payload\.durationMinutes\)/);
+});
+
 test('úprava klienta se otevírá z minikarty v modálním okně', () => {
   assert.match(appSource, /aria-label=\{`Upravit klienta \$\{client\.fullName\}`\}/);
   assert.match(appSource, /role="dialog"/);
@@ -61,4 +91,13 @@ test('pravý sloupec začíná podporami a v hlavičce nechává jen jméno klie
   assert.doesNotMatch(appSource, /label="Položky na ose"/);
   assert.doesNotMatch(appSource, /label="Čas podpory"/);
   assert.doesNotMatch(appSource, /label="Dokumenty"/);
+});
+
+test('projekty CECH a MAS mají velký přepínač a odlišné barevné pozadí', () => {
+  assert.match(projectSwitcherSource, /h-14 min-w-40/);
+  assert.match(projectSwitcherSource, /text-lg font-black/);
+  assert.match(appSource, /activeProject\.theme\.page \|\| viewTheme\.page/);
+  assert.match(appSource, /activeProject\.theme\.header \|\| viewTheme\.header/);
+  assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#c7d2fe/);
+  assert.match(projectsSource, /page: 'bg-\[radial-gradient\(circle_at_top_left,#bbf7d0/);
 });

@@ -21,6 +21,9 @@ function doGet(e) {
     if (action === 'listPerformances') {
       return jsonResponse_({ ok: true, performances: listPerformances_(projectId) });
     }
+    if (action === 'listPaymentPlans') {
+      return jsonResponse_({ ok: true, paymentPlans: listPaymentPlans_(projectId) });
+    }
     if (action === 'getProjectConfig') {
       return jsonResponse_({ ok: true, project: PROJECT_CONFIG[projectId] });
     }
@@ -73,6 +76,12 @@ function doPost(e) {
       return jsonResponse_({
         ok: true,
         performance: savePerformance_(payload.performance || {}, context)
+      });
+    }
+    if (action === 'savePaymentPlan') {
+      return jsonResponse_({
+        ok: true,
+        paymentPlan: savePaymentPlan_(payload.paymentPlan || {}, context)
       });
     }
     if (action === 'deletePerformance') {

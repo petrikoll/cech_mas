@@ -2,8 +2,13 @@ import React from 'react';
 import { AlertCircle, CheckCircle2, Clock, History, Loader2, Save, Sparkles, UserRound } from 'lucide-react';
 import { KA1_PHASES } from '../config/ka1Catalog.js';
 import { EmptyState, Panel } from '../components/ui.jsx';
+import PaymentCalendarsPanel from './PaymentCalendarsPanel.jsx';
 
 const MEETING_FORMS = ['Osobně', 'Telefonicky', 'Online', 'Terénní'];
+const KA1_ACTIVITY_TITLE_BY_CODE = Object.freeze(
+  KA1_PHASES.flatMap((phase) => phase.activities)
+    .reduce((result, activity) => ({ ...result, [activity.code]: activity.title }), {})
+);
 
 function timeToMinutes(value) {
   const match = String(value || '').match(/^(\d{1,2}):(\d{2})$/);
@@ -36,6 +41,7 @@ function Ka02View({
   clients,
   records,
   onSaveRecord,
+  onUpdateRecord,
   ka02Draft,
   setKa02Draft,
   currentWorker,
@@ -45,6 +51,7 @@ function Ka02View({
   const [formError, setFormError] = React.useState('');
   const [isGeneratingAiNote, setIsGeneratingAiNote] = React.useState(false);
   const [aiReview, setAiReview] = React.useState(null);
+  const [clientOverviewView, setClientOverviewView] = React.useState('performances');
   const selectedClient = clients.find((client) => client.id === ka02Draft.selectedClientId) || null;
   const selectedPhase = KA1_PHASES.find((phase) => phase.code === ka02Draft.phaseCode) || KA1_PHASES[0];
   const durationMinutes = durationFromDraft(ka02Draft);
@@ -192,7 +199,31 @@ function Ka02View({
       record.clientId === ka02Draft.selectedClientId &&
       Array.isArray(record.payload?.activityCodes)
     )
+    .sort((a, b) => String(b.activityDate || '').localeCompare(String(a.activityDate || '')))
     .slice(0, 8);
+
+  const performancePreview = (record) => {
+    const payload = record.payload || {};
+    const codes = Array.isArray(payload.activityCodes) ? payload.activityCodes : [];
+    const activityTitles = Array.isArray(payload.activityTitles) && payload.activityTitles.length
+      ? payload.activityTitles
+      : codes.map((code) => KA1_ACTIVITY_TITLE_BY_CODE[code]).filter(Boolean);
+    const note = String(
+      payload.caseNote ||
+      payload.topics ||
+      record.documentText ||
+      payload.outcome ||
+      payload.nextSteps ||
+      ''
+    ).trim();
+    return {
+      codes,
+      activityTitles,
+      note,
+      place: payload.place || '',
+      meetingForm: payload.meetingForm || ''
+    };
+  };
 
   return (
     <div className="space-y-4">
@@ -290,21 +321,72 @@ function Ka02View({
             </div>
           </Panel>
 
-          <Panel title="Poslední výkony klienta" icon={History}>
-            {!selectedClient ? (
+          <Panel title="Přehled klienta" icon={History}>
+            <div className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1">
+              <button
+                type="button"
+                onClick={() => setClientOverviewView('performances')}
+                className={`rounded-lg px-2 py-2 text-xs font-extrabold transition ${
+                  clientOverviewView === 'performances'
+                    ? 'bg-white text-indigo-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Poslední výkony
+              </button>
+              <button
+                type="button"
+                onClick={() => setClientOverviewView('payment-plans')}
+                className={`rounded-lg px-2 py-2 text-xs font-extrabold transition ${
+                  clientOverviewView === 'payment-plans'
+                    ? 'bg-white text-indigo-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Splátkové kalendáře
+              </button>
+            </div>
+
+            {clientOverviewView === 'payment-plans' ? (
+              <PaymentCalendarsPanel
+                selectedClient={selectedClient}
+                records={records}
+                onSaveRecord={onSaveRecord}
+                onUpdateRecord={onUpdateRecord}
+                isSaving={isSaving}
+              />
+            ) : !selectedClient ? (
               <p className="text-sm text-slate-500">Nejprve vyberte klienta.</p>
             ) : recentPerformances.length ? (
               <div className="space-y-2">
-                {recentPerformances.map((record) => (
-                  <div key={record.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
-                    <div className="text-xs font-bold text-slate-800">
-                      {(record.payload.activityCodes || []).join(', ')}
+                {recentPerformances.map((record) => {
+                  const preview = performancePreview(record);
+                  return (
+                    <div key={record.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-black text-indigo-800">
+                          {preview.codes.join(', ') || 'KA1'}
+                        </span>
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {record.activityDate} · {formatDuration(record.payload.durationMinutes)}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 text-xs font-bold leading-snug text-slate-800">
+                        {preview.activityTitles.length
+                          ? preview.activityTitles.join(' · ')
+                          : record.title || 'Klientská práce'}
+                      </div>
+                      <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-600">
+                        {preview.note || 'Výkon nemá slovní zápis.'}
+                      </div>
+                      {(preview.meetingForm || preview.place) && (
+                        <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                          {[preview.meetingForm, preview.place].filter(Boolean).join(' · ')}
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-0.5 text-xs text-slate-500">
-                      {record.activityDate} · {formatDuration(record.payload.durationMinutes)}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-slate-500">Zatím bez evidovaných výkonů.</p>

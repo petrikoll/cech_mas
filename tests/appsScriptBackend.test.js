@@ -9,6 +9,7 @@ const sourceFiles = [
   'Repository.gs',
   'Clients.gs',
   'ClientDocuments.gs',
+  'PaymentPlans.gs',
   'Performances.gs',
   'LegacyClientMapping.gs',
   'LegacyPerformanceImport.gs',
@@ -50,7 +51,10 @@ this.__backendTest = {
   buildLegacyIdentityKey_,
   resolveLegacyIdentityCandidate_,
   buildClientFolderName_,
-  addClientDocumentLinks_
+  addClientDocumentLinks_,
+  normalizePaymentMonth_,
+  addPaymentMonths_,
+  buildPaymentSchedule_
 };`, context);
 
 const backend = context.__backendTest;
@@ -268,6 +272,17 @@ test('klient dostane odkazy na celou projektovou dokumentaci', () => {
     contract_url: 'contract',
     consent_url: 'consent'
   });
+});
+
+test('backend splátkových kalendářů normalizuje měsíce a sestaví harmonogram', () => {
+  assert.equal(backend.normalizePaymentMonth_('04/26'), '2026-04');
+  assert.equal(backend.normalizePaymentMonth_('4/2026'), '2026-04');
+  assert.equal(backend.addPaymentMonths_('2026-12', 1), '2027-01');
+  assert.deepEqual(
+    plain(backend.buildPaymentSchedule_('04/26', 3)),
+    ['2026-04', '2026-05', '2026-06']
+  );
+  assert.throws(() => backend.buildPaymentSchedule_('04/26', 0), /od 1 do 240/);
 });
 
 test('zakládání složky kopíruje kompletní sadu a používá projektové šablony', () => {

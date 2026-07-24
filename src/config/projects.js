@@ -14,9 +14,13 @@ const PROJECTS = Object.freeze({
     startDate: '2026-03-01',
     endDate: '2028-06-30',
     theme: Object.freeze({
-      active: 'border-indigo-700 bg-indigo-700 text-white',
-      idle: 'border-indigo-200 bg-white text-indigo-900 hover:bg-indigo-50',
-      badge: 'border-indigo-200 bg-indigo-50 text-indigo-800'
+      active: 'border-indigo-800 bg-indigo-700 text-white shadow-md shadow-indigo-300/60',
+      idle: 'border-indigo-300 bg-white/90 text-indigo-950 hover:bg-indigo-100',
+      badge: 'border-indigo-300 bg-indigo-100 text-indigo-900',
+      page: 'bg-[radial-gradient(circle_at_top_left,#c7d2fe_0,#dbeafe_34%,#e8eef8_64%,#eef2f7_100%)]',
+      header: 'border-indigo-300 bg-indigo-50/90',
+      ambient: 'bg-indigo-400/25',
+      label: 'text-indigo-800'
     })
   }),
   [PROJECT_IDS.MAS]: Object.freeze({
@@ -29,9 +33,13 @@ const PROJECTS = Object.freeze({
     startDate: '2026-03-01',
     endDate: '2028-02-29',
     theme: Object.freeze({
-      active: 'border-emerald-700 bg-emerald-700 text-white',
-      idle: 'border-emerald-200 bg-white text-emerald-900 hover:bg-emerald-50',
-      badge: 'border-emerald-200 bg-emerald-50 text-emerald-800'
+      active: 'border-emerald-800 bg-emerald-700 text-white shadow-md shadow-emerald-300/60',
+      idle: 'border-emerald-300 bg-white/90 text-emerald-950 hover:bg-emerald-100',
+      badge: 'border-emerald-300 bg-emerald-100 text-emerald-900',
+      page: 'bg-[radial-gradient(circle_at_top_left,#bbf7d0_0,#d1fae5_34%,#e3f3e9_64%,#edf5f0_100%)]',
+      header: 'border-emerald-300 bg-emerald-50/90',
+      ambient: 'bg-emerald-400/25',
+      label: 'text-emerald-800'
     })
   })
 });

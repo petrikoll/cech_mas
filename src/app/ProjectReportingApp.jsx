@@ -94,6 +94,7 @@ import {
   buildLegacyPerformanceSummary,
   normalizePerformanceTime
 } from '../lib/legacyPerformancePresentation.js';
+import { mapPaymentPlanRowToRecord } from '../lib/paymentPlans.js';
 import AiDocumentPanel from './AiDocumentPanel.jsx';
 import Ka02View from './Ka02View.jsx';
 import ProjectSwitcher from '../components/ProjectSwitcher.jsx';
@@ -1450,7 +1451,7 @@ function stringifyPlanGoals(goals) {
     .join('\n\n');
 }
 
-function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], meetings = [], networkMeetings = [], partners = [], education = [], supervision = [] }, clientIndex = {}) {
+function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], meetings = [], networkMeetings = [], partners = [], education = [], supervision = [], paymentPlans = [] }, clientIndex = {}) {
   const clientName = (clientId) => clientIndex[clientId]?.fullName || clientId || '';
   const statusOk = (row) => !String(row.status || '').toLowerCase().includes('smaz');
   const records = [];
@@ -1726,6 +1727,11 @@ function mapSheetRecordsToAppRecords({ individualPlans = [], performances = [], 
       createdAt: Date.parse(asSheetText(row.datum)) || 0,
       updatedAt: Date.parse(asSheetText(row.datum)) || 0
     });
+  });
+
+  paymentPlans.filter(statusOk).forEach((row) => {
+    const record = mapPaymentPlanRowToRecord(row, clientIndex);
+    if (record) records.push(record);
   });
 
   return records.sort(compareTimelineRecordsDesc);
@@ -2493,7 +2499,7 @@ function App() {
 
     const fetchSheetRecords = async () => {
       try {
-        const [plans, performances, meetings, networkMeetings, partners, education, supervision, statistics] = await Promise.all([
+        const [plans, performances, meetings, networkMeetings, partners, education, supervision, paymentPlans, statistics] = await Promise.all([
           fetchAction('listIndividualPlans'),
           fetchAction('listPerformances'),
           fetchAction('listMeetings'),
@@ -2506,6 +2512,10 @@ function App() {
           fetchAction('listSupervision').catch((error) => {
             console.warn('Supervision records load skipped:', error);
             return { supervision: [], supervisions: [], supervize: [] };
+          }),
+          fetchAction('listPaymentPlans').catch((error) => {
+            console.warn('Payment plans load skipped:', error);
+            return { paymentPlans: [] };
           }),
           fetchAction('listStatistics').catch((error) => {
             console.warn('Statistics records load skipped:', error);
@@ -2521,7 +2531,8 @@ function App() {
           networkMeetings: networkMeetings.networkMeetings || [],
           partners: partners.partners || [],
           education: education.education || education.educations || education.vzdelavani || [],
-          supervision: supervision.supervision || supervision.supervisions || supervision.supervize || []
+          supervision: supervision.supervision || supervision.supervisions || supervision.supervize || [],
+          paymentPlans: paymentPlans.paymentPlans || []
         }, clientIndex).map((record) => ({
           ...record,
           projectId: activeProjectId,
@@ -3049,6 +3060,7 @@ function App() {
     if (!selectedClientId) return [];
     return records
       .filter((record) => {
+        if (record.entityType === 'payment_plan') return false;
         const clientIds = Array.isArray(record.clientIds) ?record.clientIds : record.clientId ?[record.clientId] : [];
         return clientIds.includes(selectedClientId);
       })
@@ -3460,7 +3472,13 @@ function App() {
   };
 
   const syncRecordToGoogleDrive = async (record) => {
-    if (!GOOGLE_DRIVE_UPLOAD_URL || !record?.clientId) return { skipped: true };
+    if (
+      !GOOGLE_DRIVE_UPLOAD_URL ||
+      !record?.clientId ||
+      ['payment_plan', 'client_folder_bundle', 'ai_style_memory'].includes(record.entityType)
+    ) {
+      return { skipped: true };
+    }
 
     const client = clientIndex[record.clientId] || {
       id: record.clientId,
@@ -3850,6 +3868,28 @@ function App() {
       };
     }
 
+    if (record.entityType === 'payment_plan') {
+      const result = await postGoogleSheetAction({
+        action: 'savePaymentPlan',
+        paymentPlan: {
+          plan_id: String(record.id || '').startsWith('local-') ? '' : record.id || '',
+          client_id: record.clientId || '',
+          creditor_type: payload.creditorType || '',
+          debt_amount: Number(payload.debtAmount || 0),
+          first_payment_month: payload.firstPaymentMonth || '',
+          planned_installments: Number(payload.plannedInstallments || 0),
+          status: payload.status || 'ACTIVE',
+          installment_statuses_json: JSON.stringify(payload.installmentStatuses || {}),
+          notes: payload.notes || ''
+        }
+      });
+      const savedPlan = result?.paymentPlan || {};
+      return mapPaymentPlanRowToRecord(savedPlan, clientIndex) || {
+        ...record,
+        id: savedPlan.plan_id || record.id
+      };
+    }
+
     if (record.clientId && payload.caseManagementMode) {
       const manualPartnerNames = Array.isArray(payload.manualPartnerNames) ? payload.manualPartnerNames.map((name) => String(name || '').trim()).filter(Boolean) : [];
       const participantNames = Array.isArray(payload.partnerNames) ? payload.partnerNames.map((name) => String(name || '').trim()).filter(Boolean) : [];
@@ -3971,7 +4011,7 @@ function App() {
     setIsSaving(true);
     if (noticeKey) setSaveButtonNotice(noticeKey, 'progress', progressText);
     try {
-      if (!hasFirebaseConfig || !db) {
+      if (!hasFirebaseConfig || !db || payload.entityType === 'payment_plan') {
         const localRecord = {
           ...payload,
           id: payload.id || `local-${Date.now()}-${Math.random().toString(16).slice(2)}`,
@@ -4041,7 +4081,12 @@ function App() {
         updatedAt: Date.now()
       };
 
-      if (!hasFirebaseConfig || !db) {
+      if (
+        !hasFirebaseConfig ||
+        !db ||
+        existingRecord.remoteSource ||
+        existingRecord.entityType === 'payment_plan'
+      ) {
         const syncedRecord = await syncRecordToGoogleSheet(updatedRecord);
         const nextRecords = records.map((record) => (record.id === recordId ? syncedRecord : record));
         setRecords(nextRecords);
@@ -6477,15 +6522,15 @@ ${rawPlanOutput}` }] }],
   const viewTheme = VIEW_THEMES[mainView] || VIEW_THEMES.clients;
 
   return (
-    <div className={`relative min-h-screen overflow-hidden text-slate-800 transition-colors duration-500 ${viewTheme.page}`}>
-      <div className={`pointer-events-none absolute -left-24 top-32 h-72 w-72 rounded-full blur-3xl ${viewTheme.accent}`} />
+    <div className={`relative min-h-screen overflow-hidden text-slate-800 transition-colors duration-500 ${activeProject.theme.page || viewTheme.page}`}>
+      <div className={`pointer-events-none absolute -left-24 top-32 h-72 w-72 rounded-full blur-3xl ${activeProject.theme.ambient || viewTheme.accent}`} />
       <div className="pointer-events-none absolute right-[-8rem] top-[22rem] h-96 w-96 rounded-full bg-white/35 blur-3xl" />
-      <header className={`sticky top-0 z-10 border-b shadow-sm shadow-black/5 backdrop-blur-xl transition-colors duration-500 ${viewTheme.header}`}>
+      <header className={`sticky top-0 z-10 border-b shadow-sm shadow-black/5 backdrop-blur-xl transition-colors duration-500 ${activeProject.theme.header || viewTheme.header}`}>
         <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 md:px-6">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
             <div>
               <div className="flex flex-wrap items-center gap-2">
-                <p className={`text-xs font-semibold uppercase tracking-[0.22em] ${viewTheme.label}`}>Projektové výkaznictví</p>
+                <p className={`text-xs font-semibold uppercase tracking-[0.22em] ${activeProject.theme.label || viewTheme.label}`}>Projektové výkaznictví</p>
                 <span className={`rounded-full border px-2.5 py-1 text-[10px] font-extrabold tracking-wide ${activeProject.theme.badge}`}>
                   {activeProject.shortName}
                 </span>

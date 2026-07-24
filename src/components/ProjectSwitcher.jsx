@@ -7,7 +7,7 @@ function ProjectSwitcher({ activeProjectId, onChange, disabled = false }) {
       <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">
         Aktivní projekt
       </div>
-      <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 shadow-inner">
+      <div className="inline-flex rounded-2xl border border-slate-300/80 bg-white/55 p-1.5 shadow-inner backdrop-blur-sm">
         {PROJECT_LIST.map((project) => {
           const active = project.id === activeProjectId;
           return (
@@ -17,7 +17,7 @@ function ProjectSwitcher({ activeProjectId, onChange, disabled = false }) {
               disabled={disabled}
               aria-pressed={active}
               onClick={() => onChange(project.id)}
-              className={`min-w-24 rounded-lg border px-4 py-2 text-sm font-extrabold transition ${
+              className={`h-14 min-w-40 rounded-xl border-2 px-6 text-lg font-black tracking-wide transition ${
                 active ? project.theme.active : project.theme.idle
               } disabled:cursor-not-allowed disabled:opacity-60`}
               title={project.title}

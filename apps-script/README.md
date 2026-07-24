@@ -100,3 +100,12 @@ zkopíruje `Monitorovaci_list.xlsm`, `SMLOUVA.docx` a `SOUHLAS.docx`.
 Akce je idempotentní: při opakování použije existující složku a soubory.
 Starý klientský XLSM se již nevytváří, protože výkony se zapisují přímo
 aplikací.
+
+## Splátkové kalendáře
+
+Akce `listPaymentPlans` a `savePaymentPlan` ukládají kalendáře do samostatného
+listu `PaymentPlans` v aplikačním datovém sešitu. Každý záznam je navázán na
+`project_id` a `client_id`, takže jeden klient může mít více dluhů a data
+projektů CECH a MAS se nemíchají. Průběh jednotlivých měsíců se ukládá jako
+`PAID` nebo `MISSED`; neoznačený měsíc zůstává bez výsledku. Kalendáře jsou
+technická evidence a nezvyšují počet ani čas klientských výkonů.
