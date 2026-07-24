@@ -79,6 +79,7 @@ test('přehled klienta v KA1 přepíná výkony a splátkové kalendáře', () =
   assert.match(appSource, /pendingDeleteRecord/);
   assert.match(paymentCalendarsSource, /setTimeout\(\s*\(\) => persistQueuedStatuses\(record\),\s*650/);
   assert.match(appSource, /action = 'deletePaymentPlan'/);
+  assert.match(appSource, /<Ka02View[\s\S]*?onDeleteRecord=\{deleteRecord\}/);
 });
 
 test('lokální osiřelý splátkový kalendář lze odstranit i po chybě backendu nenalezeno', () => {

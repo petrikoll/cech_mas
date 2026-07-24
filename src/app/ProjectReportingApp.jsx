@@ -7652,6 +7652,7 @@ ${rawPlanOutput}` }] }],
               records={records}
               onSaveRecord={saveRecord}
               onUpdateRecord={updateExistingRecord}
+              onDeleteRecord={deleteRecord}
               ka02Draft={ka02Draft}
               setKa02Draft={setKa02Draft}
               setGeneratorDraft={setGeneratorDraft}
