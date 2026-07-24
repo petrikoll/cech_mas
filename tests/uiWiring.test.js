@@ -67,6 +67,10 @@ test('exporty klientské podpory zahrnují pouze KA1', () => {
   assert.match(reportingSource, /Klienti a podpora KA1 do IS ESF/);
   assert.match(reportingSource, /Stáhnout zápisy podpory KA1/);
   assert.doesNotMatch(reportingSource, /label: 'KA2'/);
+  assert.match(reportingSource, /\.xlsx/);
+  assert.match(reportingSource, /\.docx/);
+  assert.match(appSource, /\/api\/export-table-xlsx/);
+  assert.match(appSource, /sections/);
 });
 
 test('KA1 performance form is bundled with the main React runtime', () => {
@@ -169,8 +173,13 @@ test('dashboard sleduje jen smluvené indikátory a projektové cíle', () => {
 
 test('dashboard spouští hromadnou kontrolu klientů v ISIR', () => {
   assert.match(reportingSource, /Hromadně ověřit klienty v ISIR/);
+  assert.match(reportingSource, /role="status"/);
+  assert.match(reportingSource, /aria-live="polite"/);
+  assert.match(reportingSource, /Kontrola zatím nebyla spuštěna/);
   assert.match(appSource, /verifyProjectInsolvencies/);
   assert.match(appSource, /isVerifyingProjectInsolvencies/);
+  assert.match(appSource, /zpracovávám dávku/);
+  assert.match(appSource, /opakuji dávku/);
 });
 
 test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy', () => {

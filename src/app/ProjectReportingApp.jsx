@@ -103,7 +103,6 @@ import cechBackgroundImage from '../assets/project-cech-background.webp';
 import masBackgroundImage from '../assets/project-mas-background.webp';
 import {
   buildAddress,
-  buildAllRecordsBackupHtml,
   buildClientFolderHtml,
   buildDriveUploadPayload,
   buildFallbackGeneratedText,
@@ -3749,7 +3748,7 @@ function App() {
   };
 
 
-  const postGoogleSheetAction = async (payload) => {
+  const postGoogleSheetAction = async (payload, options = {}) => {
     if (!GOOGLE_SHEET_MACRO_URL) return null;
     const scopedPayload = {
       ...payload,
@@ -3773,6 +3772,12 @@ function App() {
         const isTransientGatewayError = [502, 503, 504].includes(response.status);
         if (!response.ok) {
           if (isTransientGatewayError && attempt < maxAttempts) {
+            options.onRetry?.({
+              attempt,
+              nextAttempt: attempt + 1,
+              maxAttempts,
+              status: response.status
+            });
             await new Promise((resolve) => window.setTimeout(resolve, attempt * 900));
             continue;
           }
@@ -3784,6 +3789,12 @@ function App() {
       } catch (error) {
         const isNetworkFailure = error instanceof TypeError;
         if (isRetrySafeAction && isNetworkFailure && attempt < maxAttempts) {
+          options.onRetry?.({
+            attempt,
+            nextAttempt: attempt + 1,
+            maxAttempts,
+            status: null
+          });
           await new Promise((resolve) => window.setTimeout(resolve, attempt * 900));
           continue;
         }
@@ -4531,10 +4542,23 @@ function App() {
       const receivedRows = [];
 
       for (let batchNumber = 0; batchNumber < 20; batchNumber += 1) {
-        const result = await postGoogleSheetAction({
-          action: 'verifyProjectInsolvencies',
-          offset
-        });
+        setProjectInsolvencyNotice(
+          `ISIR: zpracovávám dávku ${batchNumber + 1} · dosud ověřeno ${totalChecked}${totalEligible ? ` z ${totalEligible}` : ''} klientů…`
+        );
+        const result = await postGoogleSheetAction(
+          {
+            action: 'verifyProjectInsolvencies',
+            offset
+          },
+          {
+            onRetry: ({ nextAttempt, maxAttempts, status }) => {
+              const reason = status ? `dočasná chyba ${status}` : 'dočasný výpadek spojení';
+              setProjectInsolvencyNotice(
+                `ISIR: ${reason} · opakuji dávku ${batchNumber + 1} (pokus ${nextAttempt}/${maxAttempts})…`
+              );
+            }
+          }
+        );
         const batch = result?.batch;
         if (!batch) throw new Error('ISIR nevrátil výsledek hromadné kontroly.');
         receivedRows.push(...(Array.isArray(batch.verifications) ? batch.verifications : []));
@@ -6015,15 +6039,6 @@ ${rawOutput}` }] }],
     setMainView(nextView);
   };
 
-  const formatHoursForExport = (hours) => {
-    const safeHours = Number(hours || 0);
-    const totalMinutes = Math.round(safeHours * 60);
-    const wholeHours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    const decimalHours = (totalMinutes / 60).toFixed(1).replace('.', ',');
-    return `${decimalHours} hod (${String(wholeHours).padStart(2, '0')}hod${String(minutes).padStart(2, '0')}min)`;
-  };
-
   const getUniqueClientSupportRecords = (sourceRecords) => {
     const seen = new Set();
     return (sourceRecords || []).filter((record) => {
@@ -6083,7 +6098,28 @@ ${rawOutput}` }] }],
     );
   };
 
-  const exportClientsCsv = () => {
+  const downloadOfficeExport = async (url, payload, filename) => {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, filename })
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.error || `Export ${filename} se nepodařilo vytvořit.`);
+    }
+    const blob = await response.blob();
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = href;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(href);
+  };
+
+  const exportClientsXlsx = async () => {
     const rows = accessibleClients.map((client) => {
       const stats = getClientDashboardExportStats(client.id);
       const supportCategory = stats.totalHours >= 40 ? '40 hodin a více' : stats.totalHours > 0 ? 'Méně než 40 hodin' : 'Bez podpory';
@@ -6100,14 +6136,13 @@ ${rawOutput}` }] }],
         client.datumVstupu || '',
         client.datumVystupu || '',
         stats.supportCount,
-        formatHoursForExport(stats.totalHours),
-        formatHoursForExport(stats.ka1Hours),
+        Math.round(stats.totalHours * 100) / 100,
+        Math.round(stats.ka1Hours * 100) / 100,
         supportCategory
       ];
     });
 
-    downloadCsv(
-      [
+    const headers = [
         'Interní ID',
         'Klient',
         'Datum narození',
@@ -6120,19 +6155,65 @@ ${rawOutput}` }] }],
         'Datum vstupu',
         'Datum výstupu',
         'Počet zápisů podpory',
-        'Celková podpora',
-        'Podpora KA1',
+        'Celková podpora (hod)',
+        'Podpora KA1 (hod)',
         'Kategorie podpory'
-      ],
-      rows,
-      'klienti-a-podpora-is-esf.csv'
-    );
+      ];
+    try {
+      await downloadOfficeExport('/api/export-table-xlsx', {
+        sheetName: 'Klienti a podpora KA1',
+        headers,
+        rows,
+        columnWidths: [14, 28, 14, 12, 20, 26, 24, 28, 18, 14, 14, 16, 20, 18, 22]
+      }, `klienti-a-podpora-ka1-is-esf-${todayIso()}.xlsx`);
+      setFlash('Export XLSX byl vytvořen.');
+    } catch (error) {
+      setFlash(error.message || 'Export XLSX se nepodařilo vytvořit.');
+    }
   };
 
-  const exportAllRecordsBackup = () => {
+  const exportAllRecordsBackup = async () => {
     const supportRecords = getUniqueClientSupportRecords(filteredRecords);
-    const content = buildAllRecordsBackupHtml(supportRecords, clients);
-    downloadHtmlDocument(content, `zapisy-podpory-${todayIso()}.doc`);
+    const sortedRecords = [...supportRecords].sort((a, b) => {
+      const clientCompare = String(a.clientName || '').localeCompare(String(b.clientName || ''), 'cs');
+      return clientCompare || String(a.activityDate || '').localeCompare(String(b.activityDate || ''));
+    });
+    let previousClientId = '';
+    const sections = sortedRecords.map((record, index) => {
+      const payload = record.payload || {};
+      const clientId = record.clientId || record.clientIds?.[0] || '';
+      const client = clientIndex[clientId];
+      const clientName = client?.fullName || record.clientName || 'Klient bez jména';
+      const pageBreakBefore = index > 0 && clientId !== previousClientId;
+      previousClientId = clientId;
+      return {
+        heading: clientName,
+        subheading: `${record.activityDate || 'Bez data'} · ${record.title || 'Podpora KA1'}`,
+        pageBreakBefore,
+        rows: [
+          { label: 'Pracovník', value: record.worker || 'Neuvedeno' },
+          { label: 'Čas', value: [payload.startTime, payload.endTime].filter(Boolean).join('–') || 'Neuvedeno' },
+          { label: 'Délka', value: formatSupportMinutes(payload.durationMinutes) },
+          { label: 'Činnosti KA1', value: Array.isArray(payload.activityCodes) ? payload.activityCodes.join(', ') : 'Neuvedeno' },
+          { label: 'Forma', value: payload.meetingForm || 'Neuvedeno' },
+          { label: 'Místo', value: payload.place || 'Neuvedeno' }
+        ],
+        text: record.documentText || payload.caseNote || payload.topics || 'Bez textového zápisu.'
+      };
+    });
+    try {
+      await downloadOfficeExport('/api/export-record-docx', {
+        title: `Zápisy podpory KA1 · projekt ${activeProjectId}`,
+        rows: [
+          { label: 'Datum exportu', value: todayIso() },
+          { label: 'Počet zápisů', value: String(supportRecords.length) }
+        ],
+        sections
+      }, `zapisy-podpory-ka1-${activeProjectId.toLowerCase()}-${todayIso()}.docx`);
+      setFlash('Export DOCX byl vytvořen.');
+    } catch (error) {
+      setFlash(error.message || 'Export DOCX se nepodařilo vytvořit.');
+    }
   };
   const exportIndicatorsCsv = () => {
     const rows = computedIndicators.map((item) => [
@@ -8014,7 +8095,7 @@ ${rawPlanOutput}` }] }],
               dashboardOverview={dashboardOverview}
               projectDashboard={projectDashboard}
               activeProjectId={activeProjectId}
-              exportClientsCsv={exportClientsCsv}
+              exportClientsXlsx={exportClientsXlsx}
               exportAllRecordsBackup={exportAllRecordsBackup}
               supportExportCount={getUniqueClientSupportRecords(filteredRecords).length}
               dashboardFilters={dashboardFilters}

@@ -19,6 +19,7 @@ reference-old-*/
 
 # Lokální analytické podklady mohou obsahovat osobní údaje.
 .analysis/
+.artifact-qa/
 .agents/
 reference/
 tools/

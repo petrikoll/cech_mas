@@ -4,6 +4,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleDocxExportRequest } from './docxExport.js';
+import { handleXlsxExportRequest } from './xlsxExport.js';
 import { handleGoogleAppsScriptProxy } from './googleAppsScriptProxy.js';
 import { handleGeminiProxyRequest } from './geminiProxy.js';
 
@@ -96,6 +97,11 @@ const server = createServer((request, response) => {
   const isDocxExport = url.pathname === '/api/export-record-docx' || url.pathname === '/api/export-plan-docx';
   if (request.method === 'POST' && isDocxExport) {
     void handleDocxExportRequest(request, response);
+    return;
+  }
+
+  if (request.method === 'POST' && url.pathname === '/api/export-table-xlsx') {
+    void handleXlsxExportRequest(request, response);
     return;
   }
 

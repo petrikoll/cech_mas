@@ -105,7 +105,7 @@ function GoalCard({ item, tone }) {
 function ReportingView({
   projectDashboard,
   activeProjectId,
-  exportClientsCsv,
+  exportClientsXlsx,
   exportAllRecordsBackup,
   supportExportCount,
   dashboardFilters,
@@ -146,17 +146,31 @@ function ReportingView({
             <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Plnění indikátorů a cílů</h1>
             <p className="mt-1 text-sm text-slate-600">Rychlý přehled aktuálního plnění vůči cílovým hodnotám.</p>
           </div>
-          <button
-            type="button"
-            onClick={handleVerifyProjectInsolvencies}
-            disabled={isVerifyingProjectInsolvencies}
-            className={`inline-flex items-center justify-center gap-2 rounded-xl border bg-white/75 px-4 py-3 text-sm font-extrabold shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-wait disabled:opacity-60 ${tone.badge}`}
-          >
-            {isVerifyingProjectInsolvencies
-              ? <Loader2 className="h-5 w-5 animate-spin" />
-              : <ShieldCheck className="h-5 w-5" />}
-            {isVerifyingProjectInsolvencies ? 'Probíhá hromadná kontrola ISIR…' : 'Hromadně ověřit klienty v ISIR'}
-          </button>
+          <div className="w-full sm:w-auto sm:min-w-[360px]">
+            <button
+              type="button"
+              onClick={handleVerifyProjectInsolvencies}
+              disabled={isVerifyingProjectInsolvencies}
+              className={`inline-flex w-full items-center justify-center gap-2 rounded-xl border bg-white/75 px-4 py-3 text-sm font-extrabold shadow-[0_8px_24px_-20px_rgba(15,23,42,0.45)] transition hover:-translate-y-0.5 hover:bg-white disabled:cursor-wait disabled:opacity-60 ${tone.badge}`}
+            >
+              {isVerifyingProjectInsolvencies
+                ? <Loader2 className="h-5 w-5 animate-spin" />
+                : <ShieldCheck className="h-5 w-5" />}
+              {isVerifyingProjectInsolvencies ? 'Probíhá hromadná kontrola ISIR…' : 'Hromadně ověřit klienty v ISIR'}
+            </button>
+            <div
+              role="status"
+              aria-live="polite"
+              className={`mt-2 flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${
+                isVerifyingProjectInsolvencies
+                  ? 'border-indigo-200 bg-indigo-50 text-indigo-800'
+                  : 'border-slate-200 bg-white/70 text-slate-600'
+              }`}
+            >
+              {isVerifyingProjectInsolvencies && <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
+              <span>{projectInsolvencyNotice || 'Kontrola zatím nebyla spuštěna.'}</span>
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -164,11 +178,6 @@ function ReportingView({
           <SummaryCard label="Výsledkové indikátory" accessibleLabel="Plnění indikátorů výsledků celkem v %" value={fulfillment.resultPercent} icon={BarChart3} tone={tone} />
           <SummaryCard label="Projektové cíle" accessibleLabel="Plnění cílů celkem v %" value={fulfillment.goalsPercent} icon={CheckCircle2} tone={tone} />
         </div>
-        {projectInsolvencyNotice && (
-          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
-            {projectInsolvencyNotice}
-          </div>
-        )}
       </section>
 
       <section>
@@ -197,11 +206,11 @@ function ReportingView({
         icon={Activity}
         action={
           <div className="flex flex-wrap gap-2">
-            <button onClick={exportClientsCsv} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
-              <FileSpreadsheet className="h-4 w-4" /> Klienti a podpora KA1 do IS ESF
+            <button onClick={exportClientsXlsx} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
+              <FileSpreadsheet className="h-4 w-4" /> Klienti a podpora KA1 do IS ESF (.xlsx)
             </button><HelpIcon help={HELP.dashboardExport} />
             <button onClick={exportAllRecordsBackup} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              <Archive className="h-4 w-4" /> Stáhnout zápisy podpory KA1 ({supportExportCount || 0})
+              <Archive className="h-4 w-4" /> Stáhnout zápisy podpory KA1 (.docx) ({supportExportCount || 0})
             </button>
           </div>
         }
