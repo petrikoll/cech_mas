@@ -119,6 +119,11 @@ test('ISIR snapshot ukládá řízení, dokumenty a odkazy na Google Disk', () =
   assert.match(insolvencyVerificationSource, /drive_url/);
 });
 
+test('importovaná lokální ISIR analýza se uloží jako plnohodnotná kazuistika', () => {
+  assert.match(insolvencyVerificationSource, /row\.kind === 'LEGACY_LOCAL_IMPORT'/);
+  assert.match(insolvencyVerificationSource, /ai_case_study:\s*caseStudy/);
+});
+
 test('číslování vychází pouze z obsazených klientských řádků', () => {
   const rows = [
     ['CECH', 'Jan', 'Novák', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', 68, ''],

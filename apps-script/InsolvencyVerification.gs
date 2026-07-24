@@ -272,7 +272,8 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
   upsertDataObject_(DATA_SHEETS.insolvencyAnalyses, 'analysis_id', analysisId, row);
 
   const finance = summary.finances && typeof summary.finances === 'object' ? summary.finances : {};
-  const isCaseStudy = row.kind === 'CASE_DOCUMENT_ANALYSIS';
+  const isCaseStudy = row.kind === 'CASE_DOCUMENT_ANALYSIS'
+    || row.kind === 'LEGACY_LOCAL_IMPORT';
   if (isCaseStudy) {
     updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
       claims_count: Number(finance.reviewed_claims_count) || caseRow.claims_count || 0,
