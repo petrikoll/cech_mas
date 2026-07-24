@@ -3081,24 +3081,7 @@ function App() {
         isSynthetic: false
       }));
 
-    const entryDate = selectedClient.datumVstupu || selectedClient.datumZarazeni || '';
-    const syntheticEntry = entryDate
-      ? [{
-          id: `entry-${selectedClient.id}`,
-          entityType: 'project_entry',
-          activityDate: entryDate,
-          worker: '',
-          ka: '',
-          title: 'Zařazení klienta do projektu',
-          clientId: selectedClient.id,
-          clientIds: [selectedClient.id],
-          clientName: selectedClient.fullName,
-          summary: `Status klienta: ${selectedClient.projectStatusLabel || 'Neuvedeno'}`,
-          isSynthetic: true
-        }]
-      : [];
-
-    return [...syntheticEntry, ...timelineRecords].sort(compareTimelineRecordsDesc);
+    return timelineRecords;
   }, [records, selectedClient]);
 
   const selectedClientSupportBreakdown = useMemo(() => {
