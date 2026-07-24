@@ -224,8 +224,11 @@ test('ISIR imports a saved local archive without another Gemini call', () => {
   assert.match(isirViewSource, /<iframe/);
   assert.match(isirViewSource, /const previewDocument =/);
   assert.match(isirViewSource, /overflow-x-auto border-b border-slate-100/);
-  assert.match(isirViewSource, /flex min-w-max gap-3/);
-  assert.match(isirViewSource, /w-\[260px\] flex-none/);
+  assert.match(isirViewSource, /aria-label="Seznam PDF dokumentů"/);
+  assert.match(isirViewSource, /flex min-w-max divide-x/);
+  assert.match(isirViewSource, /w-\[182px\] flex-none/);
+  assert.match(isirViewSource, /\/api\/isir-document\?url=/);
+  assert.match(isirViewSource, /zoom=page-width&pagemode=thumbs/);
   assert.doesNotMatch(isirViewSource, /xl:grid-cols-\[minmax\(0,1\.28fr\)_minmax\(360px,0\.72fr\)\]/);
   assert.match(appSource, /importLegacyIsirData/);
   assert.match(appSource, /readLegacyIsirMigrationFile/);

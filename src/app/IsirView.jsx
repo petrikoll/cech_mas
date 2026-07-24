@@ -42,13 +42,6 @@ const formatMoney = (value) => {
     : '—';
 };
 
-const formatBytes = (value) => {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric) || numeric <= 0) return '';
-  if (numeric < 1024 * 1024) return `${Math.round(numeric / 1024)} kB`;
-  return `${(numeric / (1024 * 1024)).toFixed(1).replace('.', ',')} MB`;
-};
-
 const isTruthy = (value) => /^(ano|true|1)$/i.test(String(value || ''));
 const normalizedStatus = (value) => String(value || '').trim().toLocaleUpperCase('cs') || 'BEZ ŘÍZENÍ';
 const isDebtRelief = (value) => /ODDLUŽEN/i.test(normalizedStatus(value));
@@ -57,6 +50,24 @@ const isOpenCase = (value) => /NEVYŘ|NEVYR|VYŘIZ|MORATOR|KONKURS/i.test(normal
 const safeParse = (value, fallback = {}) => {
   if (value && typeof value === 'object') return value;
   try { return JSON.parse(String(value || '')); } catch { return fallback; }
+};
+
+const getPdfPreviewUrl = (document) => {
+  const sourceUrl = String(document?.source_url || '');
+  try {
+    const parsed = new URL(sourceUrl);
+    if (
+      parsed.protocol === 'https:'
+      && parsed.hostname.toLowerCase() === 'isir.justice.cz'
+      && parsed.pathname.toLowerCase() === '/isir/doc/dokument.pdf'
+      && /^\d+$/.test(parsed.searchParams.get('id') || '')
+    ) {
+      return `/api/isir-document?url=${encodeURIComponent(parsed.toString())}#page=1&zoom=page-width&pagemode=thumbs`;
+    }
+  } catch {
+    // Neoficiální nebo starší odkaz se otevře původním způsobem.
+  }
+  return document?.drive_url || sourceUrl;
 };
 
 const statusTone = (status) => {
@@ -257,18 +268,18 @@ export default function IsirView({
     const finance = analysisResult.finances || {};
     const caseNewDocuments = selectedCaseDocuments.filter((item) => isTruthy(item.is_new));
     const previewDocument = selectedCaseDocuments.find((item) => item.document_id === previewDocumentId) || null;
+    const previewDocumentUrl = getPdfPreviewUrl(previewDocument);
     return (
       <section className="space-y-4">
-        <div className="rounded-3xl border border-white bg-white/[0.94] p-5 shadow-[0_22px_60px_-46px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.05]">
+        <article className="rounded-3xl border border-white bg-[#f3e8d7]/[0.96] p-5 shadow-[0_22px_60px_-46px_rgba(15,23,42,0.45)] ring-1 ring-amber-950/[0.08]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-start gap-3">
-              <button type="button" onClick={() => setView('list')} className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-600 hover:bg-slate-50" aria-label="Zpět na přehled">
+              <button type="button" onClick={() => setView('list')} className="rounded-xl border border-amber-900/10 bg-white/80 p-2.5 text-slate-600 hover:bg-white" aria-label="Zpět na přehled">
                 <ArrowLeft className="h-5 w-5" />
               </button>
               <div>
-                <p className="text-xs font-bold uppercase tracking-[0.16em] text-sky-700">Detail klienta ISIR · ID {selectedRow.client.clientNumber}</p>
-                <h2 className="mt-1 text-2xl font-black text-slate-950">{selectedRow.client.fullName}</h2>
-                <p className="mt-1 text-sm text-slate-500">Datum narození {formatDate(selectedRow.client.datumNarozeni)} · projekt {selectedRow.client.projectId}</p>
+                <h2 className="text-2xl font-black text-slate-950">{selectedRow.client.fullName}</h2>
+                <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-amber-900/60">Klient ISIR · ID {selectedRow.client.clientNumber}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -280,8 +291,29 @@ export default function IsirView({
               </button>
             </div>
           </div>
+          <div className="mt-5 grid gap-x-8 gap-y-4 border-t border-amber-950/10 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+            {[
+              ['Klient', selectedRow.client.fullName],
+              ['Datum narození', formatDate(selectedRow.client.datumNarozeni)],
+              ['Projekt', selectedRow.client.projectId],
+              ['Poslední kontrola', formatDate(selectedRow.lastChecked, true)],
+              ['Stav řízení', selectedCase ? normalizedStatus(selectedCase.case_status) : 'BEZ ŘÍZENÍ'],
+              ['Spisová značka', selectedCase?.case_number || '—'],
+              ['Datum zahájení', formatDate(selectedCase?.proceeding_started_at)],
+              ['Poslední událost', selectedCase?.last_event_title || '—'],
+              ['Hlavní dokumenty', selectedCase ? (selectedCase.main_document_count || selectedCaseDocuments.filter((item) => isTruthy(item.is_main)).length) : '—'],
+              ['Vedlejší dokumenty', selectedCase ? (selectedCase.secondary_document_count || selectedCaseDocuments.filter((item) => !isTruthy(item.is_main)).length) : '—'],
+              ['Lhůta přihlášek', formatDate(selectedCase?.claims_deadline)],
+              ['Přihlášky pohledávek', finance.reviewed_claims_count ?? selectedCase?.claims_count ?? '—']
+            ].map(([label, value]) => (
+              <div key={label} className={label === 'Poslední událost' ? 'lg:col-span-2' : ''}>
+                <p className="text-[10px] font-extrabold uppercase tracking-wide text-amber-950/55">{label}</p>
+                <p className={`mt-1 text-sm font-extrabold leading-5 ${label === 'Stav řízení' && isDebtRelief(value) ? 'text-emerald-800' : 'text-slate-900'}`}>{value}</p>
+              </div>
+            ))}
+          </div>
           {selectedRow.clientCases.length > 1 && (
-            <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+            <div className="mt-5 flex flex-wrap gap-2 border-t border-amber-950/10 pt-4">
               {selectedRow.clientCases.map((item) => (
                 <button key={item.case_id} type="button" onClick={() => {
                   setSelectedCaseId(item.case_id);
@@ -295,7 +327,7 @@ export default function IsirView({
               ))}
             </div>
           )}
-        </div>
+        </article>
 
         {!selectedCase ? (
           <div className="rounded-3xl border border-white bg-white/90 p-12 text-center ring-1 ring-slate-900/[0.05]">
@@ -305,50 +337,8 @@ export default function IsirView({
           </div>
         ) : (
           <>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {[
-                ['Stav řízení', normalizedStatus(selectedCase.case_status), statusTone(normalizedStatus(selectedCase.case_status))],
-                ['Spisová značka', selectedCase.case_number || '—', 'bg-sky-50 text-sky-900 ring-sky-100'],
-                ['Datum zahájení', formatDate(selectedCase.proceeding_started_at), 'bg-white text-slate-900 ring-slate-200'],
-                ['Poslední kontrola', formatDate(selectedRow.lastChecked, true), 'bg-white text-slate-900 ring-slate-200']
-              ].map(([label, value, tone]) => (
-                <div key={label} className={`rounded-2xl p-4 ring-1 ${tone}`}>
-                  <p className="text-[11px] font-bold uppercase tracking-wide opacity-70">{label}</p>
-                  <p className="mt-2 text-base font-black">{value}</p>
-                </div>
-              ))}
-            </div>
-
             <div className="space-y-4">
               <div className="space-y-4">
-                <article className="rounded-3xl border border-white bg-white/[0.94] p-5 shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-bold uppercase tracking-wide text-slate-500">Souhrn řízení</p>
-                      <h3 className="mt-1 text-lg font-black text-slate-950">{selectedCase.last_event_title || 'Poslední událost není uvedena'}</h3>
-                      <p className="mt-1 text-sm text-slate-500">{formatDate(selectedCase.last_event_at)} · {selectedCase.city || 'ISIR'}</p>
-                    </div>
-                    {selectedCase.detail_url && (
-                      <a href={selectedCase.detail_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
-                        Otevřít v ISIR <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                  </div>
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {[
-                      ['Hlavní dokumenty', selectedCase.main_document_count || selectedCaseDocuments.filter((item) => isTruthy(item.is_main)).length],
-                      ['Vedlejší dokumenty', selectedCase.secondary_document_count || selectedCaseDocuments.filter((item) => !isTruthy(item.is_main)).length],
-                      ['Lhůta přihlášek', formatDate(selectedCase.claims_deadline)],
-                      ['Přihlášky pohledávek', finance.reviewed_claims_count ?? selectedCase.claims_count ?? '—']
-                    ].map(([label, value]) => (
-                      <div key={label} className="rounded-2xl bg-slate-50 p-3 ring-1 ring-slate-100">
-                        <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{label}</p>
-                        <p className="mt-1 text-base font-black text-slate-900">{value}</p>
-                      </div>
-                    ))}
-                  </div>
-                </article>
-
                 <article className="overflow-hidden rounded-3xl border border-white bg-white/[0.95] shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
                   <div className="flex flex-col gap-3 border-b border-slate-100 p-5 sm:flex-row sm:items-center sm:justify-between">
                     <div>
@@ -367,26 +357,24 @@ export default function IsirView({
                       </button>
                     </div>
                   </div>
-                  <div className="overflow-x-auto border-b border-slate-100 px-4 py-4">
-                    <div className="flex min-w-max gap-3 pb-2">
+                  <div className="overflow-x-auto border-b border-slate-100 px-4 py-4" aria-label="Seznam PDF dokumentů">
+                    <div className="flex min-w-max divide-x divide-slate-200 overflow-hidden rounded-xl border border-slate-200 bg-white">
                     {selectedCaseDocuments.map((document) => {
                       const selected = selectedDocumentIds.includes(document.document_id);
                       const expanded = expandedDocumentId === document.document_id;
                       const documentAnalysis = safeParse(document.analysis_json, {});
-                      const originalSize = formatBytes(document.original_size);
-                      const storedSize = formatBytes(document.stored_size);
                       return (
                         <div
                           key={document.document_id}
-                          className={`flex w-[260px] flex-none flex-col overflow-hidden rounded-2xl border shadow-sm transition ${
+                          className={`flex w-[182px] flex-none flex-col transition ${
                             previewDocumentId === document.document_id
-                              ? 'border-sky-300 bg-sky-50/70 ring-2 ring-sky-100'
+                              ? 'bg-sky-50 ring-2 ring-inset ring-sky-300'
                               : selected
-                                ? 'border-violet-300 bg-violet-50/55 ring-1 ring-violet-100'
-                                : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+                                ? 'bg-violet-50/70 ring-1 ring-inset ring-violet-200'
+                                : 'bg-white hover:bg-slate-50'
                           }`}
                         >
-                          <div className="flex min-h-[132px] items-start gap-2.5 p-3">
+                          <div className="flex min-h-[112px] items-start gap-2 p-2.5">
                               <input
                                 type="checkbox"
                                 checked={selected}
@@ -401,40 +389,35 @@ export default function IsirView({
                                 className="min-w-0 flex-1 text-left"
                               >
                                 <span className="block text-xs font-extrabold text-slate-500">{formatDate(document.event_date)}</span>
-                                <strong className="mt-1 block line-clamp-3 text-sm leading-5 text-slate-900">{document.title}</strong>
-                                <span className="mt-2 flex flex-wrap items-center gap-1.5">
+                                <strong className="mt-1 block line-clamp-3 text-xs leading-4 text-slate-900">{document.title}</strong>
+                                <span className="mt-1.5 flex flex-wrap items-center gap-1">
                                   <span className={`rounded-md px-2 py-0.5 text-[10px] font-extrabold uppercase ring-1 ${
                                     isTruthy(document.is_main) ? 'bg-sky-50 text-sky-800 ring-sky-100' : 'bg-slate-50 text-slate-600 ring-slate-200'
                                   }`}>{isTruthy(document.is_main) ? 'hlavní dokument' : 'příloha'}</span>
                                   {isTruthy(document.is_new) && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-800 ring-1 ring-amber-200">nové</span>}
                                 </span>
-                                <span className="mt-2 block truncate text-[11px] text-slate-500">
-                                  {document.drive_url ? 'Uloženo na Google Disku' : 'Zdroj ISIR'}
-                                  {originalSize ? ` · ${originalSize}` : ''}
-                                  {storedSize && storedSize !== originalSize ? ` → ${storedSize}` : ''}
-                                </span>
                               </button>
                           </div>
-                          <div className="mt-auto grid grid-cols-2 gap-1.5 border-t border-slate-100 bg-slate-50/70 p-2">
+                          <div className="mt-auto flex items-center gap-1 border-t border-slate-100 bg-slate-50/70 p-1.5">
                               {documentAnalysis.summary && (
-                                <button type="button" onClick={() => setExpandedDocumentId(expanded ? '' : document.document_id)} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg border border-violet-100 bg-violet-50 px-2 py-2 text-xs font-bold text-violet-800">
-                                  <Bot className="h-3.5 w-3.5" /> AI shrnutí <ChevronDown className={`h-3.5 w-3.5 transition ${expanded ? 'rotate-180' : ''}`} />
+                                <button type="button" onClick={() => setExpandedDocumentId(expanded ? '' : document.document_id)} title="AI shrnutí dokumentu" aria-label="AI shrnutí dokumentu" className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-violet-100 bg-violet-50 text-violet-800">
+                                  <Bot className="h-3.5 w-3.5" />
                                 </button>
                               )}
-                              <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                              <a href={document.drive_url || document.source_url} target="_blank" rel="noreferrer" className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50">
                                 <ExternalLink className="h-3.5 w-3.5" /> Otevřít
                               </a>
-                              <a href={document.source_url} target="_blank" rel="noreferrer" download className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                                <Download className="h-3.5 w-3.5" /> Stáhnout
+                              <a href={document.source_url} target="_blank" rel="noreferrer" download title="Stáhnout" aria-label={`Stáhnout ${document.title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+                                <Download className="h-3.5 w-3.5" />
                               </a>
                               {!document.drive_url && (
-                                <button type="button" onClick={() => archiveDocument(document.document_id)} disabled={Boolean(archivingDocumentId)} className="col-span-2 inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-2 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60">
-                                  {archivingDocumentId === document.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />} Uložit na Disk
+                                <button type="button" onClick={() => archiveDocument(document.document_id)} disabled={Boolean(archivingDocumentId)} title="Uložit na Disk" aria-label={`Uložit na Disk ${document.title}`} className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-60">
+                                  {archivingDocumentId === document.document_id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <DownloadCloud className="h-3.5 w-3.5" />}
                                 </button>
                               )}
                           </div>
                           {expanded && documentAnalysis.summary && (
-                            <div className="border-t border-violet-100 bg-white p-3 text-xs leading-5 text-slate-700">
+                            <div className="border-t border-violet-100 bg-white p-2.5 text-[11px] leading-4 text-slate-700">
                               <strong className="text-violet-800">{documentAnalysis.category || 'AI shrnutí dokumentu'}</strong>
                               <p className="mt-1">{documentAnalysis.summary}</p>
                             </div>
@@ -465,7 +448,7 @@ export default function IsirView({
                       </div>
                       <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-inner">
                         <iframe
-                          src={previewDocument.drive_url || previewDocument.source_url}
+                          src={previewDocumentUrl}
                           title={`Náhled dokumentu ${previewDocument.title}`}
                           loading="lazy"
                           referrerPolicy="no-referrer"
