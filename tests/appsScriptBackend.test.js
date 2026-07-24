@@ -30,7 +30,19 @@ const insolvencyVerificationSource = readFileSync(
 const context = vm.createContext({
   console,
   Utilities: {
-    formatDate: (date) => new Date(date).toISOString().slice(0, 10),
+    formatDate: (date, timeZone, format) => {
+      if (format === 'yyyy-MM') {
+        const parts = new Intl.DateTimeFormat('en', {
+          timeZone,
+          year: 'numeric',
+          month: '2-digit'
+        }).formatToParts(new Date(date));
+        const year = parts.find((part) => part.type === 'year')?.value;
+        const month = parts.find((part) => part.type === 'month')?.value;
+        return `${year}-${month}`;
+      }
+      return new Date(date).toISOString().slice(0, 10);
+    },
     getUuid: () => 'test-uuid',
     computeDigest: () => Array.from({ length: 32 }, (_, index) => index + 1),
     DigestAlgorithm: { SHA_256: 'SHA_256' }
@@ -343,6 +355,7 @@ test('backend splátkových kalendářů normalizuje měsíce a sestaví harmono
   assert.equal(backend.normalizePaymentMonth_('04/26'), '2026-04');
   assert.equal(backend.normalizePaymentMonth_('4/2026'), '2026-04');
   assert.equal(backend.normalizePaymentMonth_('2026-04-01T00:00:00.000Z'), '2026-04');
+  assert.equal(backend.normalizePaymentMonth_('2026-03-31T22:00:00.000Z'), '2026-04');
   assert.equal(backend.addPaymentMonths_('2026-12', 1), '2027-01');
   assert.deepEqual(
     plain(backend.buildPaymentSchedule_('04/26', 3)),

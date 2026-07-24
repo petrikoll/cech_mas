@@ -15,6 +15,7 @@ test('měsíc splátky přijímá hodnoty ze starého sheetu i HTML formuláře'
   assert.equal(normalizePaymentMonth('04/26'), '2026-04');
   assert.equal(normalizePaymentMonth('4/2026'), '2026-04');
   assert.equal(normalizePaymentMonth('2026-04-01T00:00:00.000Z'), '2026-04');
+  assert.equal(normalizePaymentMonth('2026-03-31T22:00:00.000Z'), '2026-04');
   assert.equal(normalizePaymentMonth('2026-4'), '2026-04');
   assert.equal(normalizePaymentMonth('13/26'), '');
 });

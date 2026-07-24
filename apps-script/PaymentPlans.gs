@@ -3,6 +3,12 @@ function normalizePaymentMonth_(value) {
     return Utilities.formatDate(value, BACKEND_CONFIG.timeZone, 'yyyy-MM');
   }
   const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    const parsedDate = new Date(text);
+    if (!Number.isNaN(parsedDate.getTime())) {
+      return Utilities.formatDate(parsedDate, BACKEND_CONFIG.timeZone, 'yyyy-MM');
+    }
+  }
   let match = text.match(/^(\d{4})-(\d{1,2})(?:$|-\d{1,2}|T)/);
   if (match) {
     const month = Number(match[2]);

@@ -11,11 +11,27 @@ export const PAYMENT_PLAN_STATUSES = Object.freeze({
   PAUSED: 'PAUSED'
 });
 
+function paymentMonthFromDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en', {
+    timeZone: 'Europe/Prague',
+    year: 'numeric',
+    month: '2-digit'
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === 'year')?.value || '';
+  const month = parts.find((part) => part.type === 'month')?.value || '';
+  return year && month ? `${year}-${month}` : '';
+}
+
 export function normalizePaymentMonth(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
-    return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}`;
+    return paymentMonthFromDate(value);
   }
   const text = String(value || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}T/.test(text)) {
+    return paymentMonthFromDate(text);
+  }
   let match = text.match(/^(\d{4})-(\d{1,2})(?:$|-\d{1,2}|T)/);
   if (match) {
     const month = Number(match[2]);
