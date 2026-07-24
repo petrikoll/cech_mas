@@ -2259,6 +2259,7 @@ function App() {
   const [insolvencyDocuments, setInsolvencyDocuments] = useState([]);
   const [insolvencyAnalyses, setInsolvencyAnalyses] = useState([]);
   const [isAnalyzingInsolvency, setIsAnalyzingInsolvency] = useState(false);
+  const [isImportingLegacyIsir, setIsImportingLegacyIsir] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [clientCaseSummary, setClientCaseSummary] = useState('');
@@ -4756,6 +4757,133 @@ function App() {
       throw error;
     } finally {
       setIsAnalyzingInsolvency(false);
+    }
+  };
+
+  const importLegacyIsirData = async (bundle) => {
+    if (!bundle || Number(bundle.version) !== 1 || !Array.isArray(bundle.entries)) {
+      throw new Error('Soubor není platný importní balíček ISIR.');
+    }
+    const bundleProjectId = String(bundle.project_id || '').toUpperCase();
+    if (bundleProjectId !== activeProjectId) {
+      throw new Error(`Tento balíček patří projektu ${bundleProjectId || 'neuvedeno'}. Nejprve přepněte aktivní projekt.`);
+    }
+
+    setIsImportingLegacyIsir(true);
+    let importedClients = 0;
+    let importedCases = 0;
+    let importedDocuments = 0;
+    let importedAnalyses = 0;
+    try {
+      for (let index = 0; index < bundle.entries.length; index += 1) {
+        const entry = bundle.entries[index] || {};
+        const targetNumber = Number(entry.target_client_number);
+        const client = projectClients.find((item) => Number(item.clientNumber) === targetNumber);
+        if (!client) throw new Error(`Klient ID ${targetNumber} nebyl v projektu ${activeProjectId} nalezen.`);
+        const sourceBirthDate = normalizeClientDateForSheet(entry.source_birth_date);
+        const targetBirthDate = normalizeClientDateForSheet(client.datumNarozeni);
+        if (!sourceBirthDate || sourceBirthDate !== targetBirthDate) {
+          throw new Error(`Datum narození nesouhlasí u klienta ID ${targetNumber}. Import byl zastaven.`);
+        }
+
+        setProjectInsolvencyNotice(
+          `Import lokálního archivu ${index + 1}/${bundle.entries.length}: ${client.fullName}`
+        );
+        const snapshotResult = await postGoogleSheetAction({
+          action: 'saveInsolvencySnapshot',
+          project_id: activeProjectId,
+          snapshot: {
+            verification: {
+              ...(entry.verification || {}),
+              client_id: client.id,
+              client_number: targetNumber,
+              project_id: activeProjectId
+            },
+            cases: (entry.cases || []).map((item) => ({
+              ...item,
+              client_id: client.id,
+              client_number: targetNumber,
+              project_id: activeProjectId
+            })),
+            documents: (entry.documents || []).map((item) => ({
+              ...item,
+              client_id: client.id,
+              project_id: activeProjectId
+            }))
+          }
+        });
+        const savedSnapshot = snapshotResult?.snapshot || {};
+        if (savedSnapshot.verification) {
+          setInsolvencyVerifications((previous) => [
+            savedSnapshot.verification,
+            ...previous.filter((item) => item.client_id !== client.id)
+          ]);
+        }
+        if (Array.isArray(savedSnapshot.cases)) {
+          const savedIds = new Set(savedSnapshot.cases.map((item) => item.case_id));
+          setInsolvencyCases((previous) => [
+            ...savedSnapshot.cases,
+            ...previous.filter((item) => !savedIds.has(item.case_id))
+          ]);
+        }
+        if (Array.isArray(savedSnapshot.documents)) {
+          const savedIds = new Set(savedSnapshot.documents.map((item) => item.document_id));
+          setInsolvencyDocuments((previous) => [
+            ...savedSnapshot.documents,
+            ...previous.filter((item) => !savedIds.has(item.document_id))
+          ]);
+        }
+
+        for (const analysis of entry.analyses || []) {
+          const analysisResult = await postGoogleSheetAction({
+            action: 'saveInsolvencyAnalysis',
+            project_id: activeProjectId,
+            analysis: {
+              ...analysis,
+              client_id: client.id,
+              project_id: activeProjectId
+            }
+          });
+          const saved = analysisResult?.result || {};
+          if (saved.analysis) {
+            const result = analysis.result || {};
+            const storedAnalysis = {
+              ...saved.analysis,
+              result,
+              result_json: JSON.stringify(result)
+            };
+            setInsolvencyAnalyses((previous) => [
+              storedAnalysis,
+              ...previous.filter((item) => item.analysis_id !== storedAnalysis.analysis_id)
+            ]);
+          }
+          if (saved.case) {
+            setInsolvencyCases((previous) => previous.map((item) =>
+              item.case_id === saved.case.case_id ? saved.case : item
+            ));
+          }
+          if (Array.isArray(saved.documents)) {
+            const byId = Object.fromEntries(saved.documents.map((item) => [item.document_id, item]));
+            setInsolvencyDocuments((previous) => previous.map((item) => byId[item.document_id] || item));
+          }
+          importedAnalyses += 1;
+        }
+        importedClients += 1;
+        importedCases += (entry.cases || []).length;
+        importedDocuments += (entry.documents || []).length;
+      }
+
+      const message = `Lokální archiv byl importován: ${importedClients} klientů, ${importedCases} řízení, ${importedDocuments} dokumentů a ${importedAnalyses} uložených AI analýz. Gemini nebyl spuštěn.`;
+      setProjectInsolvencyNotice(message);
+      setFlash(message);
+      return { importedClients, importedCases, importedDocuments, importedAnalyses };
+    } catch (error) {
+      const message = saveErrorMessage('Import lokálního archivu ISIR selhal', error);
+      setProjectInsolvencyNotice(message);
+      setFlash(message);
+      throw error;
+    } finally {
+      setIsImportingLegacyIsir(false);
     }
   };
 
@@ -8258,6 +8386,7 @@ ${rawPlanOutput}` }] }],
               analyses={insolvencyAnalyses}
               isChecking={isVerifyingInsolvency || isVerifyingProjectInsolvencies}
               isAnalyzing={isAnalyzingInsolvency}
+              isImporting={isImportingLegacyIsir}
               progressNotice={projectInsolvencyNotice}
               onCheckClient={verifyClientFromIsirView}
               onCheckProject={verifyProjectInsolvencies}
@@ -8265,6 +8394,7 @@ ${rawPlanOutput}` }] }],
               onAnalyzeDocuments={analyzeIsirDocuments}
               onMarkDocumentsSeen={markIsirDocumentsSeen}
               onExportCaseStudy={exportIsirCaseStudy}
+              onImportLegacyData={importLegacyIsirData}
               onEditClient={openClientEditForm}
             />
           </React.Suspense>

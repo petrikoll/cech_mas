@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   ArrowLeft,
   BellRing,
@@ -24,6 +24,7 @@ import {
   ShieldAlert,
   Sparkles,
   Users,
+  UploadCloud,
   X
 } from 'lucide-react';
 
@@ -92,6 +93,7 @@ export default function IsirView({
   analyses = [],
   isChecking,
   isAnalyzing,
+  isImporting,
   progressNotice,
   onCheckClient,
   onCheckProject,
@@ -99,6 +101,7 @@ export default function IsirView({
   onAnalyzeDocuments,
   onMarkDocumentsSeen,
   onExportCaseStudy,
+  onImportLegacyData,
   onEditClient
 }) {
   const [query, setQuery] = useState('');
@@ -113,6 +116,7 @@ export default function IsirView({
   const [archivingDocumentId, setArchivingDocumentId] = useState('');
   const [analysisTab, setAnalysisTab] = useState('current');
   const [localAnalysisByCase, setLocalAnalysisByCase] = useState({});
+  const importInputRef = useRef(null);
 
   const verificationByClient = useMemo(
     () => Object.fromEntries(verifications.map((item) => [String(item.client_id), item])),
@@ -237,6 +241,14 @@ export default function IsirView({
     setArchivingDocumentId(documentId);
     try { await onArchiveDocument(documentId); }
     finally { setArchivingDocumentId(''); }
+  };
+
+  const importLegacyBundle = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const bundle = JSON.parse(await file.text());
+    await onImportLegacyData(bundle);
   };
 
   if (view === 'detail' && selectedRow) {
@@ -478,9 +490,15 @@ export default function IsirView({
               <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Přehled řízení, nových dokumentů, lhůt a AI analýz pro klienty právě zvoleného projektu.</p>
             </div>
           </div>
-          <button type="button" onClick={onCheckProject} disabled={isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-700 px-5 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-sky-800 disabled:opacity-60">
-            {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Hromadná kontrola ISIR
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <input ref={importInputRef} type="file" accept="application/json,.json" onChange={importLegacyBundle} className="sr-only" />
+            <button type="button" onClick={() => importInputRef.current?.click()} disabled={isImporting || isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-extrabold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60">
+              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UploadCloud className="h-4 w-4" />} Importovat lokální archiv
+            </button>
+            <button type="button" onClick={onCheckProject} disabled={isChecking || isImporting} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-700 px-5 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-sky-800 disabled:opacity-60">
+              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Hromadná kontrola ISIR
+            </button>
+          </div>
         </div>
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {[
@@ -498,7 +516,7 @@ export default function IsirView({
         </div>
         <div role="status" aria-live="polite" className="mt-4 min-h-12 rounded-2xl border border-sky-100 bg-sky-50/75 px-4 py-3 text-sm leading-6 text-sky-950">
           <div className="flex items-start gap-2">
-            {isChecking ? <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin" /> : <Clock3 className="mt-1 h-4 w-4 shrink-0" />}
+            {isChecking || isImporting ? <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin" /> : <Clock3 className="mt-1 h-4 w-4 shrink-0" />}
             <span>{progressNotice || 'Kontrola nyní neběží. Uložené výsledky jsou dostupné v tabulce.'}</span>
           </div>
         </div>

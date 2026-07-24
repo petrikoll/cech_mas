@@ -213,3 +213,14 @@ test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy',
   assert.match(appSource, /https:\/\/mapovani\.onrender\.com\//);
   assert.match(appSource, /target="_blank"/);
 });
+
+test('ISIR imports a saved local archive without another Gemini call', () => {
+  const isirViewSource = readFileSync(
+    new URL('../src/app/IsirView.jsx', import.meta.url),
+    'utf8'
+  );
+  assert.match(isirViewSource, /Importovat lokální archiv/);
+  assert.match(appSource, /importLegacyIsirData/);
+  assert.match(appSource, /Gemini nebyl spuštěn/);
+  assert.match(appSource, /Datum narození nesouhlasí/);
+});
