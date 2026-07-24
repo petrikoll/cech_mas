@@ -87,5 +87,20 @@ function authorizeBackendResources() {
   const legacyFolderId = PropertiesService.getScriptProperties()
     .getProperty(BACKEND_CONFIG.legacyClientRootFolderProperty);
   if (legacyFolderId) DriveApp.getFolderById(legacyFolderId).getName();
+  [
+    BACKEND_CONFIG.cechRootFolderProperty,
+    BACKEND_CONFIG.masRootFolderProperty
+  ].forEach((propertyName) => {
+    DriveApp.getFolderById(getRequiredScriptProperty_(propertyName)).getName();
+  });
+  [
+    BACKEND_CONFIG.monitoringListTemplateProperty,
+    BACKEND_CONFIG.cechContractTemplateProperty,
+    BACKEND_CONFIG.masContractTemplateProperty,
+    BACKEND_CONFIG.cechConsentTemplateProperty,
+    BACKEND_CONFIG.masConsentTemplateProperty
+  ].forEach((propertyName) => {
+    DriveApp.getFileById(getRequiredScriptProperty_(propertyName)).getName();
+  });
   return { ok: true };
 }

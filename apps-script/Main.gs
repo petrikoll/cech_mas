@@ -63,6 +63,12 @@ function doPost(e) {
     if (action === 'saveClient') {
       return jsonResponse_({ ok: true, client: saveClient_(payload.client || {}, context) });
     }
+    if (action === 'ensureClientFolder') {
+      return jsonResponse_({
+        ok: true,
+        client: ensureClientFolder_(payload.klient_id, context)
+      });
+    }
     if (action === 'savePerformance') {
       return jsonResponse_({
         ok: true,

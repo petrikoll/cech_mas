@@ -189,9 +189,17 @@ function listClients_(projectId) {
     map[String(Number(row.client_number))] = row;
     return map;
   }, {});
+  const documentsByClientId = readDataObjects_(DATA_SHEETS.clientDocuments).reduce((map, row) => {
+    map[String(row.client_id || '')] = row;
+    return map;
+  }, {});
   return getRegistryRows_()
     .map((row, index) => registryRowToClient_(row, index + 2, indexByNumber))
-    .filter((client) => client && client.project_id === normalizedProjectId);
+    .filter((client) => client && client.project_id === normalizedProjectId)
+    .map((client) => addClientDocumentLinks_(
+      client,
+      documentsByClientId[String(client.klient_id || '')]
+    ));
 }
 
 function buildRegistryRowFromClient_(client, clientNumber, existingRow) {

@@ -3550,30 +3550,25 @@ function App() {
 
     if (manageState) setIsProvisioningClientFolder(true);
     try {
-      const response = await fetch(GOOGLE_SHEET_MACRO_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({
-          action: 'ensureClientFolder',
-          klient_id: client.id
-        })
+      const result = await postGoogleSheetAction({
+        action: 'ensureClientFolder',
+        klient_id: client.id
       });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok || result.ok === false || !result.client) {
-        throw new Error(result.error || ('Vytvo\u0159en\u00ed slo\u017eky klienta selhalo se stavem ' + response.status + '.'));
-      }
+      if (!result?.client) throw new Error('Apps Script nevrátil připravenou klientskou složku.');
 
       const provisionedClient = result.client;
       const bundleResult = {
         clientFolderUrl: provisionedClient.drive_folder_url || '',
         clientFolderName: client.fullName || client.id,
         monListFileUrl: provisionedClient.monitoring_list_url || '',
-        monListFileName: 'Monitorovac\u00ed list - ' + (client.fullName || client.id)
+        monListFileName: 'Monitorovac\u00ed list - ' + (client.fullName || client.id),
+        contractFileUrl: provisionedClient.contract_url || '',
+        consentFileUrl: provisionedClient.consent_url || ''
       };
       if (!bundleResult.clientFolderUrl) throw new Error('Apps Script nevr\u00e1til odkaz na slo\u017eku klienta.');
 
       await persistClientDriveBundleRecord(client, bundleResult);
-      if (!silent) setFlash('Slo\u017eka klienta a monitorovac\u00ed list byly p\u0159ipraveny.');
+      if (!silent) setFlash('Kompletní klientská složka byla připravena.');
       return true;
     } catch (error) {
       console.error('Client Drive folder provisioning error:', error);
@@ -4184,8 +4179,16 @@ function App() {
       setSelectedClientId(savedClient.id);
       setClientDraft({ ...emptyClientDraft, datumVstupu: todayIso() });
       setSheetError('');
-      setSaveButtonNotice('client-create', 'success', 'Klient uložen');
-      setFlash('Klient uložen');
+      setSaveButtonNotice('client-create', 'progress', 'Klient uložen, vytvářím kompletní klientskou složku…');
+      const folderCreated = await provisionClientDriveFolder(savedClient, { silent: true, manageState: false });
+      if (folderCreated) {
+        setSaveButtonNotice('client-create', 'success', 'Klient a kompletní klientská složka vytvořeny');
+        setFlash('Klientská složka včetně smlouvy, souhlasu a monitorovacího listu byla vytvořena.');
+      } else {
+        const message = 'Klient byl uložen, ale kompletní klientskou složku se nepodařilo vytvořit.';
+        setSaveButtonNotice('client-create', 'error', message);
+        setFlash(message);
+      }
     } catch (error) {
       console.error('Google Sheets client save error:', error);
       const message = saveErrorMessage('Klient nebyl uložen', error);
@@ -6761,7 +6764,7 @@ ${rawPlanOutput}` }] }],
                           className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {isProvisioningClientFolder ?<Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
-                          Vytvoř složku klienta
+                          Otevřít složku klienta
                         </button>
                         <HelpIcon help={HELP.clientsDriveFolder} />
                         <button
@@ -6879,8 +6882,7 @@ ${rawPlanOutput}` }] }],
                         </div>
                       ) : (
                         <div className="mt-3 text-sm text-emerald-800">
-                          Po kliknutí na <strong>Vytvoř složku klienta</strong> se založí složka klienta
-                          a vytvoří nebo aktualizuje monitorovací list.
+                          Kompletní klientská složka se zakládá automaticky při uložení klienta.
                         </div>
                       )}
                     </div>
@@ -7718,15 +7720,17 @@ ${rawPlanOutput}` }] }],
                     {isSummarizingCase ? <Loader2 className="h-4 w-4 animate-spin" /> : <ClipboardCopy className="h-4 w-4" />}
                     Shrnout zakázku AI
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => provisionClientDriveFolder(selectedClient)}
-                    disabled={isProvisioningClientFolder}
-                    className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
-                  >
-                    {isProvisioningClientFolder ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />}
-                    Vytvořit složku klienta
-                  </button>
+                  {selectedClientDriveBundle?.payload?.clientFolderUrl && (
+                    <a
+                      href={selectedClientDriveBundle.payload.clientFolderUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50"
+                    >
+                      <DownloadCloud className="h-4 w-4" />
+                      Otevřít složku klienta
+                    </a>
+                  )}
                 </div>
 
                 {clientCaseSummary && (
@@ -7739,16 +7743,11 @@ ${rawPlanOutput}` }] }],
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
                     {[
                       {
-                        key: 'folder',
-                        title: 'Klientská složka',
-                        url: selectedClientDriveBundle.payload.clientFolderUrl
-                      },
-                      {
                         key: 'monlist',
                         title: 'Monitorovací list',
                         url: selectedClientDriveBundle.payload.monListFileUrl
                       }
-                    ].map((item) => (
+                    ].filter((item) => item.url).map((item) => (
                       <a
                         key={item.key}
                         href={item.url || '#'}

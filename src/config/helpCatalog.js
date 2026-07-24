@@ -44,7 +44,7 @@ const HELP = {
   clientsCaseSince: { title: 'Začátek case managementu', text: 'Datum, od kterého je klient veden v režimu case managementu.' },
   clientsCaseReason: { title: 'Důvod case managementu', text: 'Stručně a věcně popište, proč klient potřebuje koordinaci podpory.' },
   clientsAiSummary: { title: 'AI souhrn zakázky', text: 'Vytvoří pracovní souhrn z klientské osy a evidovaných podpor. Výsledek vždy zkontrolujte.' },
-  clientsDriveFolder: { title: 'Složka klienta', text: 'Založí klientskou složku v určené složce Google Drive a vytvoří nebo aktualizuje monitorovací list.' },
+  clientsDriveFolder: { title: 'Složka klienta', text: 'Při uložení klienta založí složku se třemi pracovními podsložkami, monitorovacím listem a projektově správnou smlouvou a souhlasem.' },
   clientsSupportHours: { title: 'Čas podpory', text: 'Součet vychází z uložených záznamů a počítá se přesně v minutách. U výkonů se používá interval OD–DO; u individuálního plánu jeho uložená délka.' },
   iprSituation: { title: 'Popis situace', text: 'Popište výchozí situaci klienta, jeho zdroje, omezení, potřeby a podstatné bariéry stručně a věcně. Toto pole je povinné.' },
   iprGoals: { title: 'Cíle plánu', text: 'Každý cíl obsahuje popis, akční kroky a termín. Uložené cíle se nabízejí v zápisech jako vazba Cíl IP.' },

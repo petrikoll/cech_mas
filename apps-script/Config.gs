@@ -13,7 +13,8 @@ const BACKEND_CONFIG = Object.freeze({
   cechContractTemplateProperty: 'CECH_CONTRACT_TEMPLATE_ID',
   masContractTemplateProperty: 'MAS_CONTRACT_TEMPLATE_ID',
   cechConsentTemplateProperty: 'CECH_CONSENT_TEMPLATE_ID',
-  masConsentTemplateProperty: 'MAS_CONSENT_TEMPLATE_ID'
+  masConsentTemplateProperty: 'MAS_CONSENT_TEMPLATE_ID',
+  monitoringListTemplateProperty: 'MONITORING_LIST_TEMPLATE_ID'
 });
 
 const PROJECT_CONFIG = Object.freeze({
@@ -64,6 +65,15 @@ const DATA_SHEETS = Object.freeze({
     name: 'ClientIndex',
     headers: Object.freeze([
       'client_id', 'client_number', 'project_id', 'registry_row', 'status',
+      'created_at', 'created_by', 'updated_at', 'updated_by'
+    ])
+  }),
+  clientDocuments: Object.freeze({
+    name: 'ClientDocuments',
+    headers: Object.freeze([
+      'client_id', 'client_number', 'project_id', 'folder_id', 'folder_url',
+      'monitoring_list_file_id', 'monitoring_list_url',
+      'contract_file_id', 'contract_url', 'consent_file_id', 'consent_url',
       'created_at', 'created_by', 'updated_at', 'updated_by'
     ])
   }),

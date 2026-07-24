@@ -13,6 +13,16 @@ Apps Script `Script Properties`.
 - `LEGACY_STATS_SPREADSHEET_ID` – stará statistická sestava s listem
   `Klientská Data`
 
+Další povinné Script Properties pro klientskou dokumentaci:
+
+- `CECH_CLIENT_ROOT_FOLDER_ID` a `MAS_CLIENT_ROOT_FOLDER_ID` – cílové kořenové
+  složky klientů jednotlivých projektů,
+- `MONITORING_LIST_TEMPLATE_ID` – šablona `Sablona ML.xlsm`,
+- `CECH_CONTRACT_TEMPLATE_ID`, `MAS_CONTRACT_TEMPLATE_ID` – projektové
+  šablony smlouvy,
+- `CECH_CONSENT_TEMPLATE_ID`, `MAS_CONSENT_TEMPLATE_ID` – projektové
+  šablony souhlasu se zpracováním osobních údajů.
+
 ## První nastavení
 
 1. Vytvořit samostatný Apps Script projekt.
@@ -82,7 +92,11 @@ složce určené Script Property `LEGACY_CLIENT_ROOT_FOLDER_ID`. Import:
 Neúplné sloty bez data, platného času nebo činnosti se nezapíší a zůstanou
 uvedené v listu `LegacyImportCache` jako stav `PARTIAL`.
 
-## Zatím nezapojené kroky
+## Klientské složky a dokumentace
 
-Vytváření Drive složek a doplňování smluv/souhlasů bude přidáno po potvrzení
-cílových složek, šablon a požadovaného výstupního formátu monitorovacího listu.
+Akce `ensureClientFolder` založí nebo doplní klientskou složku pod kořenem
+správného projektu. Vytvoří tři pracovní podsložky a z projektových šablon
+zkopíruje `Monitorovaci_list.xlsm`, `SMLOUVA.docx` a `SOUHLAS.docx`.
+Akce je idempotentní: při opakování použije existující složku a soubory.
+Starý klientský XLSM se již nevytváří, protože výkony se zapisují přímo
+aplikací.

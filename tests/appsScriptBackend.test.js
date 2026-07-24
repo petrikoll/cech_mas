@@ -8,6 +8,7 @@ const sourceFiles = [
   'Security.gs',
   'Repository.gs',
   'Clients.gs',
+  'ClientDocuments.gs',
   'Performances.gs',
   'LegacyClientMapping.gs',
   'LegacyPerformanceImport.gs',
@@ -47,7 +48,9 @@ this.__backendTest = {
   parseLegacyActivityCode_,
   buildLegacyPerformanceStableId_,
   buildLegacyIdentityKey_,
-  resolveLegacyIdentityCandidate_
+  resolveLegacyIdentityCandidate_,
+  buildClientFolderName_,
+  addClientDocumentLinks_
 };`, context);
 
 const backend = context.__backendTest;
@@ -235,4 +238,45 @@ test('historický import nepřiřadí klienta při nejednoznačném datu narozen
 test('Apps Script zdroje neobsahují pevně vložené Google ID ani token', () => {
   assert.doesNotMatch(source, /['"]1[A-Za-z0-9_-]{20,}['"]/);
   assert.doesNotMatch(source, /API_TOKEN\s*:\s*['"][^'"]+['"]/);
+});
+
+test('klientská složka zachová globální číslo klienta a bezpečný název', () => {
+  assert.equal(
+    backend.buildClientFolderName_({
+      client_number: 72,
+      jmeno: 'Jan',
+      prijmeni: 'Novák/Nový'
+    }),
+    '72_Jan Novák-Nový'
+  );
+});
+
+test('klient dostane odkazy na celou projektovou dokumentaci', () => {
+  const client = backend.addClientDocumentLinks_(
+    { klient_id: 'client-72' },
+    {
+      folder_url: 'folder',
+      monitoring_list_url: 'monitoring',
+      contract_url: 'contract',
+      consent_url: 'consent'
+    }
+  );
+  assert.deepEqual(plain(client), {
+    klient_id: 'client-72',
+    drive_folder_url: 'folder',
+    monitoring_list_url: 'monitoring',
+    contract_url: 'contract',
+    consent_url: 'consent'
+  });
+});
+
+test('zakládání složky kopíruje kompletní sadu a používá projektové šablony', () => {
+  assert.match(source, /'Monitorovaci_list\.xlsm'/);
+  assert.match(source, /'SMLOUVA\.docx'/);
+  assert.match(source, /'SOUHLAS\.docx'/);
+  assert.match(source, /cechContractTemplateProperty/);
+  assert.match(source, /masContractTemplateProperty/);
+  assert.match(source, /cechConsentTemplateProperty/);
+  assert.match(source, /masConsentTemplateProperty/);
+  assert.match(source, /action === 'ensureClientFolder'/);
 });
