@@ -43,6 +43,22 @@ const formatCompactDate = (value) => {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : '—';
 };
 
+const formatClaimsDeadlineStatus = (value) => {
+  const deadline = String(value || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(deadline)) return 'Nelze bezpečně určit';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Prague',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+  const todayParts = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const today = `${todayParts.year}-${todayParts.month}-${todayParts.day}`;
+  if (deadline > today) return `Běží do ${formatDate(deadline)}`;
+  if (deadline === today) return `Končí dnes (${formatDate(deadline)})`;
+  return `Skončila ${formatDate(deadline)}`;
+};
+
 const isTruthy = (value) => /^(ano|true|1)$/i.test(String(value || ''));
 const normalizedStatus = (value) => String(value || '').trim().toLocaleUpperCase('cs') || 'BEZ ŘÍZENÍ';
 const isDebtRelief = (value) => /ODDLUŽEN/i.test(normalizedStatus(value));
@@ -434,7 +450,7 @@ export default function IsirView({
               ['Poslední událost', selectedCase?.last_event_title || '—'],
               ['Hlavní dokumenty', selectedCase ? (selectedCase.main_document_count || selectedCaseDocuments.filter((item) => isTruthy(item.is_main)).length) : '—'],
               ['Vedlejší dokumenty', selectedCase ? (selectedCase.secondary_document_count || selectedCaseDocuments.filter((item) => !isTruthy(item.is_main)).length) : '—'],
-              ['Lhůta přihlášek', formatDate(selectedCase?.claims_deadline)],
+              ['Lhůta přihlášek', formatClaimsDeadlineStatus(selectedCase?.claims_deadline)],
               ['Přihlášky pohledávek', finance.reviewed_claims_count ?? selectedCase?.claims_count ?? '—']
             ].map(([label, value]) => (
               <div key={label} className={label === 'Poslední událost' ? 'lg:col-span-2' : ''}>
@@ -467,6 +483,14 @@ export default function IsirView({
           </span>
           <span className="text-slate-500">
             <strong className="text-slate-700">Kazuistika:</strong> {selectedAnalysis ? formatDate(selectedAnalysis.created_at, true) : 'zatím nevytvořena'}
+          </span>
+        </div>
+        <div role="status" aria-live="polite" className="rounded-xl border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs leading-5 text-sky-950 shadow-sm">
+          <span className="inline-flex items-start gap-2">
+            {isChecking || isAnalyzing
+              ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+              : <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />}
+            <span>{progressNotice || 'Kontrola nyní neběží.'}</span>
           </span>
         </div>
 

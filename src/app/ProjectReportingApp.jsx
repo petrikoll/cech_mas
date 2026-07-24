@@ -4663,13 +4663,14 @@ function App() {
         : 'ISIR ověřen: bez započitatelného vstupu do insolvence od 1. 3. 2026.';
       setProjectInsolvencyNotice(message);
       if (!options.silent) setFlash(message);
-      if (matched && !options.silent && (snapshot.documents || []).some((item) =>
-        /^(ano|true|1)$/i.test(String(item.is_new || ''))
-        && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
-      )) {
-        window.setTimeout(() => {
-          void runAutomaticIsirAi(snapshot, client);
-        }, 0);
+      const hasCaseDocuments = (
+        Array.isArray(snapshot?.cases)
+        && snapshot.cases.length > 0
+        && Array.isArray(snapshot?.documents)
+        && snapshot.documents.length > 0
+      );
+      if (!options.silent && hasCaseDocuments) {
+        await runAutomaticIsirAi(snapshot, client);
       }
       return snapshot;
     } catch (error) {
@@ -4716,18 +4717,22 @@ function App() {
           const snapshot = await checkClientInIsir(client);
           successful += 1;
           const isMatched = /^(ano|true|1)$/i.test(String(snapshot?.verification?.matched || ''));
-          if (isMatched) {
-            matched += 1;
-            const pendingDocuments = (snapshot.documents || []).filter((item) =>
-              /^(ano|true|1)$/i.test(String(item.is_new || ''))
-              && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
+          if (isMatched) matched += 1;
+          const pendingDocuments = (snapshot.documents || []).filter((item) =>
+            /^(ano|true|1)$/i.test(String(item.is_new || ''))
+            && !/^(ano|true|1)$/i.test(String(item.included_in_case_study || ''))
+          );
+          const hasCaseDocuments = (
+            Array.isArray(snapshot?.cases)
+            && snapshot.cases.length > 0
+            && Array.isArray(snapshot?.documents)
+            && snapshot.documents.length > 0
+          );
+          if (hasCaseDocuments) {
+            setProjectInsolvencyNotice(
+              `ISIR: ID ${client.clientNumber || '—'} · nalezeno ${pendingDocuments.length} nových dokumentů · kontroluji lhůtu a AI kazuistiku…`
             );
-            if (pendingDocuments.length) {
-              setProjectInsolvencyNotice(
-                `ISIR: ID ${client.clientNumber || '—'} · nalezeno ${pendingDocuments.length} nových dokumentů · aktualizuji AI kazuistiku…`
-              );
-              updatedCaseStudies += await runAutomaticIsirAi(snapshot, client);
-            }
+            updatedCaseStudies += await runAutomaticIsirAi(snapshot, client);
           }
         } catch (error) {
           failed += 1;
