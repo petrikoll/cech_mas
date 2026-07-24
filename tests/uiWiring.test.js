@@ -77,6 +77,7 @@ test('poslední výkony zobrazují význam, ne pouze kódy činností', () => {
   assert.match(ka1PerformanceSource, /payload\.caseNote/);
   assert.match(ka1PerformanceSource, /record\.documentText/);
   assert.match(ka1PerformanceSource, /formatDuration\(record\.payload\.durationMinutes\)/);
+  assert.match(ka1PerformanceSource, /formatActivityDate\(record\.activityDate\)/);
 });
 
 test('úprava klienta se otevírá z minikarty v modálním okně', () => {

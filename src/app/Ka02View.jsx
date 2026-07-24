@@ -29,6 +29,12 @@ function formatDuration(minutes) {
   return hours ? `${hours} h ${rest ? `${rest} min` : ''}`.trim() : `${rest} min`;
 }
 
+function formatActivityDate(value) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value || '—';
+  return `${Number(match[3])}. ${Number(match[2])}. ${match[1]}`;
+}
+
 function FieldLabel({ children, required = false }) {
   return (
     <span className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-slate-600">
@@ -360,17 +366,20 @@ function Ka02View({
             ) : !selectedClient ? (
               <p className="text-sm text-slate-500">Nejprve vyberte klienta.</p>
             ) : recentPerformances.length ? (
-              <div className="space-y-2">
+              <div className="space-y-3 border-l-2 border-indigo-200 pl-3">
                 {recentPerformances.map((record) => {
                   const preview = performancePreview(record);
                   return (
-                    <div key={record.id} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
+                    <div key={record.id} className="relative rounded-xl border border-slate-200 border-l-4 border-l-indigo-500 bg-white px-3 py-3 shadow-sm">
                       <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="rounded-md border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-black text-slate-800">
+                          {formatActivityDate(record.activityDate)}
+                        </span>
                         <span className="rounded-md bg-indigo-100 px-1.5 py-0.5 text-[10px] font-black text-indigo-800">
                           {preview.codes.join(', ') || 'KA1'}
                         </span>
                         <span className="text-[11px] font-semibold text-slate-500">
-                          {record.activityDate} · {formatDuration(record.payload.durationMinutes)}
+                          {formatDuration(record.payload.durationMinutes)}
                         </span>
                       </div>
                       <div className="mt-1.5 text-xs font-bold leading-snug text-slate-800">
@@ -378,7 +387,7 @@ function Ka02View({
                           ? preview.activityTitles.join(' · ')
                           : record.title || 'Klientská práce'}
                       </div>
-                      <div className="mt-1 line-clamp-3 text-xs leading-relaxed text-slate-600">
+                      <div className="mt-2 whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-xs leading-relaxed text-slate-700">
                         {preview.note || 'Výkon nemá slovní zápis.'}
                       </div>
                       {(preview.meetingForm || preview.place) && (

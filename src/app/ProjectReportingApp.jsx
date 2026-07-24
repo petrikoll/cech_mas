@@ -6940,7 +6940,7 @@ ${rawPlanOutput}` }] }],
                     <Panel
                       title={selectedClient.fullName}
                       titleClassName="!text-2xl !font-black !text-indigo-950"
-                      className="!border-indigo-500 !bg-indigo-100 ring-2 ring-indigo-300"
+                      className="!border-indigo-300 !border-t-4 !border-t-indigo-600 !bg-white"
                     >
                       {selectedClientSupportBreakdown.byType.length === 0 ?(
                         <EmptyState icon={BarChart3} title="U klienta zatím nejsou evidované žádné podpory." />
@@ -6978,9 +6978,10 @@ ${rawPlanOutput}` }] }],
                     </Panel>
 
                     <Panel
-                      title="Klientská osa"
+                      title="Klientská osa a výkaznictví"
                       icon={History}
-                      className="!border-indigo-400 !bg-indigo-100/70 ring-2 ring-indigo-200/80"
+                      description="Chronologický přehled výkonů s úplným slovním zápisem."
+                      className="!border-slate-200 !bg-white"
                       action={
                         <button
                           type="button"
@@ -7008,33 +7009,27 @@ ${rawPlanOutput}` }] }],
                               record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM';
 
                             return (
-                              <div key={record.id} className="grid gap-2 md:grid-cols-[72px_96px_24px_minmax(0,1fr)] md:items-start">
-                                <div className="flex justify-start pt-0.5">
-                                  <label className={`flex min-h-12 w-16 flex-col items-center justify-center gap-1 rounded-xl border px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide shadow-sm transition ${record.isSynthetic ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-55' : selectedJourneyPrintIds.includes(record.id) ? 'cursor-pointer border-slate-900 bg-slate-900 text-white' : 'cursor-pointer border-slate-300 bg-white text-slate-600 hover:border-slate-500 hover:bg-slate-50'}`} title={record.isSynthetic ? 'Zařazení klienta není samostatný tisknutelný zápis.' : 'Zařadit zápis do společného tisku'}>
-                                    <span className="inline-flex items-center gap-1">
-                                      <Printer className="h-3 w-3" />
-                                      Tisk
-                                    </span>
-                                    <input
-                                      type="checkbox"
-                                      checked={selectedJourneyPrintIds.includes(record.id)}
-                                      disabled={record.isSynthetic}
-                                      onChange={() => toggleJourneyPrintSelection(record.id)}
-                                      className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-                                    />
-                                  </label>
-                                </div>
-                                <div className="pt-1 text-xs font-semibold text-slate-500">{formatDateLabel(record.activityDate)}</div>
+                              <div key={record.id} className="grid gap-2 md:grid-cols-[24px_minmax(0,1fr)] md:items-start">
                                 <div className="relative flex h-full justify-center">
                                   <div className={`relative z-[1] mt-1 h-6 w-6 rounded-full border-4 border-white shadow-sm ${tone.dot}`} />
                                   {index < clientJourneyTimeline.length - 1 && (
-                                    <div className="absolute top-8 h-[calc(100%+1.5rem)] w-px bg-slate-200" />
+                                    <div className="absolute top-8 h-[calc(100%+1.5rem)] w-0.5 bg-slate-200" />
                                   )}
                                 </div>
-                                <div className={`rounded-xl border p-3 shadow-sm ${tone.panel}`}>
+                                <div className="rounded-2xl border border-slate-200 border-l-4 border-l-indigo-500 bg-white p-4 shadow-sm">
                                   <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                     <div className="min-w-0">
                                       <div className="flex flex-wrap items-center gap-2">
+                                        <label className={`inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs font-bold shadow-sm transition ${record.isSynthetic ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400 opacity-55' : selectedJourneyPrintIds.includes(record.id) ? 'cursor-pointer border-indigo-700 bg-indigo-700 text-white' : 'cursor-pointer border-slate-300 bg-white text-slate-800 hover:border-indigo-400'}`} title={record.isSynthetic ? 'Zařazení klienta není samostatný tisknutelný zápis.' : 'Zařadit zápis do společného tisku'}>
+                                          <input
+                                            type="checkbox"
+                                            checked={selectedJourneyPrintIds.includes(record.id)}
+                                            disabled={record.isSynthetic}
+                                            onChange={() => toggleJourneyPrintSelection(record.id)}
+                                            className="h-4 w-4 rounded border-slate-300 text-indigo-700 focus:ring-indigo-500"
+                                          />
+                                          {formatDateLabel(record.activityDate)}
+                                        </label>
                                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${tone.badge}`}>
                                           {meta.stage}
                                         </span>
@@ -7057,18 +7052,20 @@ ${rawPlanOutput}` }] }],
                                       </div>
                                     </div>
                                     <div className="flex flex-nowrap items-center justify-end gap-1">
-                                      <button
-                                        type="button"
-                                        onClick={() =>
-                                          setExpandedJourneyRecordIds((prev) =>
-                                            prev.includes(record.id) ?prev.filter((item) => item !== record.id) : [...prev, record.id]
-                                          )
-                                        }
-                                        className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
-                                      >
-                                        <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ?'rotate-90' : ''}`} />
-                                        {isExpanded ?'Skrýt' : 'Detail'}
-                                      </button>
+                                      {!isLegacyReadOnly && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setExpandedJourneyRecordIds((prev) =>
+                                              prev.includes(record.id) ?prev.filter((item) => item !== record.id) : [...prev, record.id]
+                                            )
+                                          }
+                                          className="inline-flex shrink-0 items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-700 transition hover:bg-slate-50"
+                                        >
+                                          <ChevronRight className={`h-3 w-3 transition-transform ${isExpanded ?'rotate-90' : ''}`} />
+                                          {isExpanded ?'Skrýt' : 'Detail'}
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => exportJourneyRecord(record)}
@@ -7100,8 +7097,8 @@ ${rawPlanOutput}` }] }],
                                       )}
                                     </div>
                                   </div>
-                                  <div className="mt-3 rounded-xl border border-white/70 bg-white/80 p-3 text-sm leading-snug text-slate-700">
-                                    {summary}
+                                  <div className="mt-3 whitespace-pre-wrap rounded-xl border border-slate-200 bg-slate-50/80 p-3 text-sm leading-relaxed text-slate-800">
+                                    {isLegacyReadOnly ? detail : summary}
                                   </div>
                                   {record.entityType === 'mentor_report_document' && (
                                     <div className="mt-2 text-xs text-emerald-800">

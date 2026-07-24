@@ -47,6 +47,7 @@ this.__backendTest = {
   normalizeLegacyDateValue_,
   legacyPhaseForSheetName_,
   parseLegacyActivityCode_,
+  scanLegacyActivityAndNote_,
   buildLegacyPerformanceStableId_,
   buildLegacyIdentityKey_,
   resolveLegacyIdentityCandidate_,
@@ -158,6 +159,17 @@ test('historický import normalizuje čas a vytváří stabilní ID slotu', () =
   const second = backend.buildLegacyPerformanceStableId_('file-1', 'Jednání se zájemcem', 'b4');
   assert.equal(first, second);
   assert.match(first, /^LEGACY-[a-f0-9]{40}$/);
+});
+
+test('historický import rozpozná slovní zápis i bez původního popisku', () => {
+  const rows = Array.from({ length: 18 }, () => Array(5).fill(''));
+  rows[8][1] = '1. Vyhodnocení nejvhodnějšího řešení';
+  rows[9][1] = '3. Příprava a podání oddlužení';
+  rows[12][1] = 'Na základě vyhodnocení finanční situace klienta jsme přistoupili k sepsání návrhu.';
+  const scanned = plain(backend.scanLegacyActivityAndNote_(rows, 3, 1, 'C'));
+
+  assert.deepEqual(scanned.activityCodes, ['C1', 'C3']);
+  assert.equal(scanned.noteRowIndex, 12);
 });
 
 test('historicky import cte datum z typovane hodnoty a ne z lokalizovaneho zobrazeni', () => {

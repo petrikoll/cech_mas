@@ -1,6 +1,7 @@
 const LEGACY_IMPORT_OFFSET_PROPERTY = 'LEGACY_PERFORMANCE_IMPORT_OFFSET';
+const LEGACY_NOTE_REPAIR_OFFSET_PROPERTY = 'LEGACY_PERFORMANCE_NOTE_REPAIR_OFFSET';
 const LEGACY_IMPORT_BATCH_SIZE = 8;
-const LEGACY_IMPORT_CACHE_VERSION = '5';
+const LEGACY_IMPORT_CACHE_VERSION = '6';
 
 function sha256Hex_(value) {
   const digest = Utilities.computeDigest(
@@ -77,6 +78,47 @@ function stripLegacyNoteLabel_(value) {
   return String(value || '')
     .replace(/^\s*z[aá]pis\s+z\s+jedn[aá]n[ií]\s*:\s*/i, '')
     .trim();
+}
+
+function scanLegacyActivityAndNote_(displayValues, rowIndex, columnIndex, phaseCode) {
+  const activityCodes = [];
+  let noteRowIndex = -1;
+  const lastCandidate = Math.min(rowIndex + 13, displayValues.length - 1);
+
+  for (let candidate = rowIndex + 5; candidate <= lastCandidate; candidate += 1) {
+    const cellValue = (displayValues[candidate] || [])[columnIndex];
+    const text = normalizeText_(cellValue);
+    const normalizedText = normalizeMatchText_(text);
+    if (normalizedText.startsWith('zapis z jednani')) {
+      noteRowIndex = candidate;
+      break;
+    }
+
+    const code = parseLegacyActivityCode_(phaseCode, cellValue);
+    if (code) {
+      if (!activityCodes.includes(code)) activityCodes.push(code);
+      continue;
+    }
+
+    if (!text || !activityCodes.length) continue;
+    if (
+      normalizedText.startsWith('podpis') ||
+      normalizedText.startsWith('jmeno pracovnika') ||
+      normalizedText.startsWith('datum podpisu')
+    ) {
+      continue;
+    }
+
+    // Ve vyplněných XLSM šablonách je popisek „Zápis z jednání:“ nahrazen
+    // přímo textem zápisu. První neprázdná ne-činnost po činnostech je proto zápis.
+    noteRowIndex = candidate;
+    break;
+  }
+
+  return {
+    activityCodes: activityCodes,
+    noteRowIndex: noteRowIndex
+  };
 }
 
 function listLegacyClientWorkbookFiles_() {
@@ -167,30 +209,14 @@ function extractLegacyPerformancesFromSheet_(sheet, source, clientIndex, issues)
       const startTime = normalizeLegacyTime_(timeRow[columnIndex]);
       const endTime = normalizeLegacyTime_(timeRow[columnIndex + 1]);
 
-      let noteRowIndex = -1;
-      for (
-        let candidate = rowIndex + 5;
-        candidate <= Math.min(rowIndex + 13, displayValues.length - 1);
-        candidate += 1
-      ) {
-        const text = normalizeMatchText_(
-          (displayValues[candidate] || [])[columnIndex]
-        );
-        if (text.startsWith('zapis z jednani')) {
-          noteRowIndex = candidate;
-          break;
-        }
-      }
-
-      const activityEnd = noteRowIndex >= 0 ? noteRowIndex : Math.min(rowIndex + 13, displayValues.length);
-      const activityCodes = [];
-      for (let activityRow = rowIndex + 5; activityRow < activityEnd; activityRow += 1) {
-        const code = parseLegacyActivityCode_(
-          phaseCode,
-          (displayValues[activityRow] || [])[columnIndex]
-        );
-        if (code && !activityCodes.includes(code)) activityCodes.push(code);
-      }
+      const scannedContent = scanLegacyActivityAndNote_(
+        displayValues,
+        rowIndex,
+        columnIndex,
+        phaseCode
+      );
+      const noteRowIndex = scannedContent.noteRowIndex;
+      const activityCodes = scannedContent.activityCodes;
 
       const note = noteRowIndex >= 0
         ? stripLegacyNoteLabel_((displayValues[noteRowIndex] || [])[columnIndex])
@@ -619,6 +645,33 @@ function runLegacyPerformanceDateRepairFromStart() {
   });
 }
 
+function runLegacyPerformanceNoteRepairBatch() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const properties = PropertiesService.getScriptProperties();
+    const offset = Number(properties.getProperty(LEGACY_NOTE_REPAIR_OFFSET_PROPERTY)) || 0;
+    const context = {
+      actorId: 'SYSTEM',
+      displayName: 'Oprava historických slovních zápisů',
+      role: 'SYSTEM',
+      projectId: ''
+    };
+    const result = syncLegacyPerformances_(context, {
+      offset: offset,
+      batchSize: 12,
+      force: true
+    });
+    properties.setProperty(
+      LEGACY_NOTE_REPAIR_OFFSET_PROPERTY,
+      String(result.nextOffset || 0)
+    );
+    return result;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function auditLegacyPerformanceImport() {
   const allLegacyPerformances = readDataObjects_(DATA_SHEETS.performances)
     .filter((row) => String(row.source_system || '').toUpperCase() === 'LEGACY_XLSM');
@@ -642,6 +695,21 @@ function auditLegacyPerformanceImport() {
       (sum, row) => sum + (Number(row.duration_minutes) || 0),
       0
     ),
+    performanceWithNoteCount: performances.filter((row) =>
+      Boolean(normalizeText_(row.case_note))
+    ).length,
+    performanceWithoutNoteCount: performances.filter((row) =>
+      !normalizeText_(row.case_note)
+    ).length,
+    performanceWithoutNoteRows: performances
+      .filter((row) => !normalizeText_(row.case_note))
+      .map((row) => ({
+        clientNumber: Number(row.client_number) || 0,
+        projectId: String(row.project_id || ''),
+        sheet: String(row.legacy_source_sheet || ''),
+        anchor: String(row.legacy_source_anchor || ''),
+        performanceId: String(row.performance_id || '')
+      })),
     projectCounts: performances.reduce((counts, row) => {
       const projectId = String(row.project_id || '').toUpperCase();
       counts[projectId] = (counts[projectId] || 0) + 1;
