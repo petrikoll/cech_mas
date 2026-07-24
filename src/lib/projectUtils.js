@@ -242,7 +242,7 @@ function getMockClients() {
       datumVstupu: '01.09.2023',
       datumVystupu: '',
       situacePoUkonceni: '',
-      keyWorker: 'Sociální pracovník'
+      keyWorker: 'Sulková'
     }),
     enrichClient({
       id: 'mock-eva-kolarova',
@@ -265,7 +265,7 @@ function getMockClients() {
       datumVstupu: '15.10.2023',
       datumVystupu: '',
       situacePoUkonceni: '',
-      keyWorker: 'Case manager'
+      keyWorker: 'Augustýnová'
     })
   ];
 }

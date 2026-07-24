@@ -164,13 +164,7 @@ function AiDocumentPanel({
 
   const isKa02Form = ['plan', 'consultation'].includes(generatorDraft.selectedKey);
   const isMentorForm = false;
-  const ka02WorkerOptionsByDocument = {
-    consultation: ['Soci\u00e1ln\u00ed pracovn\u00edk', 'Case manager'],
-    plan: ['Soci\u00e1ln\u00ed pracovn\u00edk']
-  };
-  const workerOptionValues = isKa02Form
-    ? ka02WorkerOptionsByDocument[generatorDraft.selectedKey] || workers.filter((worker) => worker !== 'Garant projektu')
-    : workers;
+  const workerOptionValues = workers;
   const workerOptions = workerOptionValues.map((worker) => ({
     value: worker,
     label: worker

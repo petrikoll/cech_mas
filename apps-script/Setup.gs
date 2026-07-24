@@ -72,9 +72,12 @@ function addOrUpdateUser(actorId, displayName, role, projectIds, active) {
 
 function bootstrapInitialUsers() {
   return [
-    addOrUpdateUser('Sociální pracovník', 'Sociální pracovník', 'WORKER', 'CECH,MAS', true),
-    addOrUpdateUser('Case manager', 'Case manager', 'WORKER', 'CECH,MAS', true),
-    addOrUpdateUser('Odborný garant', 'Odborný garant', 'ADMIN', 'CECH,MAS', true)
+    addOrUpdateUser('Sulková', 'Sulková', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Augustýnová', 'Augustýnová', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Nováková', 'Nováková', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Chovančáková', 'Chovančáková', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Laštovica', 'Laštovica', 'WORKER', 'CECH,MAS', true),
+    addOrUpdateUser('Řezníčková', 'Řezníčková', 'WORKER', 'CECH,MAS', true)
   ];
 }
 

@@ -22,9 +22,12 @@ const TARGETS = {
 };
 
 const WORKERS = [
-  'Soci\u00e1ln\u00ed pracovn\u00edk',
-  'Case manager',
-  'Odborn\u00fd garant'
+  'Sulkov\u00e1',
+  'August\u00fdnov\u00e1',
+  'Nov\u00e1kov\u00e1',
+  'Chovan\u010d\u00e1kov\u00e1',
+  'La\u0161tovica',
+  '\u0158ezn\u00ed\u010dkov\u00e1'
 ];
 
 const CLIENT_GENDER_OPTIONS = ['mu\u017e', '\u017eena', 'neuvedeno'];
@@ -210,7 +213,7 @@ const emptyClientDraft = {
 
 const emptyGeneratorDraft = {
   selectedKey: 'plan', clientId: '', tpmRecordId: '', linkedPlanGoalId: '', linkedPlanGoalLabel: '',
-  worker: 'Soci\u00e1ln\u00ed pracovn\u00edk', date: todayIso(), ka02StartTime: '', ka02EndTime: '', ka02Place: '', bulletNotes: '',
+  worker: WORKERS[0], date: todayIso(), ka02StartTime: '', ka02EndTime: '', ka02Place: '', bulletNotes: '',
   situationDescription: '', goals: '', plannedSteps: '', finalEvaluation: '', planDurationMinutes: '60',
   consultationType: 'Z\u00e1kladn\u00ed soci\u00e1ln\u00ed poradenstv\u00ed', supportArea: '', kuSupportTypeCode: KU_SUPPORT_DEFAULT_CODE, supportSpecific: {}, topics: '', outcome: '', nextSteps: '', durationMinutes: '',
   debtSummary: '', debtCauses: '', debtStage: 'Mapov\u00e1n\u00ed', solutionPlan: '', educationTopic: '', sessionOrder: '1',
@@ -219,7 +222,7 @@ const emptyGeneratorDraft = {
   aiStyleFeedback: '', generatedText: '', caseManagementMode: false, selectedPartnerIds: [], registeredPartnerNames: [], manualPartnerNames: [], partnerNames: [], participantCount: 0
 };
 
-const emptyFilters = { period: 'all', ka: 'all', worker: 'Odborný garant' };
+const emptyFilters = { period: 'all', ka: 'all', worker: 'all' };
 
 export {
   GOOGLE_SHEET_MACRO_URL,

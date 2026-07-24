@@ -1964,7 +1964,7 @@ const createKa01ActorDraft = () => ({
 
 const createKa02Draft = () => ({
   date: todayIso(),
-  worker: 'Sociální pracovník',
+  worker: WORKERS[0],
   selectedClientId: '',
   phaseCode: 'A',
   activityCodes: [],
@@ -2255,7 +2255,7 @@ function App() {
 
   const [ka02Draft, setKa02Draft] = useState({
     date: todayIso(),
-    worker: 'Sociální pracovník',
+    worker: WORKERS[0],
     selectedClientId: '',
     phaseCode: 'A',
     activityCodes: [],

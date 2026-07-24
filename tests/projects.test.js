@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { KA1_ACTIVITIES, KA1_PHASES } from '../src/config/ka1Catalog.js';
+import { WORKERS, emptyGeneratorDraft } from '../src/config/projectConfig.js';
 import { PROJECT_LIST, getProject, normalizeProjectId } from '../src/config/projects.js';
 
 test('konfigurace obsahuje právě projekty CECH a MAS', () => {
@@ -18,4 +19,16 @@ test('katalog KA1 obsahuje tři fáze a čtrnáct činností', () => {
     KA1_ACTIVITIES.map((activity) => activity.code),
     ['A1', 'A2', 'A3', 'A4', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7']
   );
+});
+
+test('aplikace nabízí pouze určených šest pracovníků', () => {
+  assert.deepEqual(WORKERS, [
+    'Sulková',
+    'Augustýnová',
+    'Nováková',
+    'Chovančáková',
+    'Laštovica',
+    'Řezníčková'
+  ]);
+  assert.equal(emptyGeneratorDraft.worker, 'Sulková');
 });

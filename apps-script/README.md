@@ -30,16 +30,11 @@ Další povinné Script Properties pro klientskou dokumentaci:
 3. V Project Settings nastavit Script Properties podle
    `script-properties.example.json`.
 4. Spustit ručně `initializeBackend()`.
-5. Spustit `addOrUpdateUser()` alespoň pro jednoho administrátora, například:
+5. Spustit `bootstrapInitialUsers()`, který založí aktivní přístupy do obou
+   projektů pro pracovníky aplikace:
 
    ```javascript
-   addOrUpdateUser(
-     'Odborný garant',
-     'Odborný garant',
-     'ADMIN',
-     'CECH,MAS',
-     true
-   );
+   bootstrapInitialUsers();
    ```
 
 6. Spustit `authorizeBackendResources()`.
