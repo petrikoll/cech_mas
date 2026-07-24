@@ -13,13 +13,11 @@ import {
   ExternalLink,
   FileDown,
   FileText,
-  Filter,
   FolderOpen,
   Loader2,
   Pencil,
   RefreshCw,
   Scale,
-  Search,
   ShieldAlert,
   Users,
   X
@@ -173,13 +171,10 @@ export default function IsirView({
   onExportCaseStudy,
   onEditClient
 }) {
-  const [query, setQuery] = useState('');
   const [selectedClientId, setSelectedClientId] = useState('');
   const [selectedCaseId, setSelectedCaseId] = useState('');
   const [view, setView] = useState('list');
-  const [sortBy, setSortBy] = useState('client');
   const [statusFilters, setStatusFilters] = useState([]);
-  const [onlyNew, setOnlyNew] = useState(false);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
   const [previewDocumentId, setPreviewDocumentId] = useState('');
   const [archivingDocumentId, setArchivingDocumentId] = useState('');
@@ -240,11 +235,8 @@ export default function IsirView({
   }), [clients, casesByClient, documentsByCase, verificationByClient]);
 
   const filteredRows = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase('cs');
     const rows = clientRows.filter((row) => {
-      if (normalizedQuery && !`${row.client.fullName} ${row.client.clientNumber} ${row.latestCase?.case_number || ''}`
-        .toLocaleLowerCase('cs').includes(normalizedQuery)) return false;
-      if (onlyNew && !row.newDocuments.length) return false;
+      if (!statusFilters.length) return row.clientCases.length > 0;
       if (statusFilters.length) {
         const matches = statusFilters.some((filter) => {
           if (filter === 'none') return row.status === 'BEZ ŘÍZENÍ';
@@ -260,13 +252,10 @@ export default function IsirView({
       }
       return true;
     });
-    return rows.sort((left, right) => {
-      if (sortBy === 'status') return left.status.localeCompare(right.status, 'cs');
-      if (sortBy === 'checked') return String(right.lastChecked).localeCompare(String(left.lastChecked));
-      if (sortBy === 'case') return String(left.latestCase?.case_number || '').localeCompare(String(right.latestCase?.case_number || ''), 'cs');
-      return String(left.client.fullName || '').localeCompare(String(right.client.fullName || ''), 'cs');
-    });
-  }, [clientRows, onlyNew, query, sortBy, statusFilters]);
+    return rows.sort((left, right) =>
+      String(left.client.fullName || '').localeCompare(String(right.client.fullName || ''), 'cs')
+    );
+  }, [clientRows, statusFilters]);
 
   const selectedRow = clientRows.find((row) => row.client.id === selectedClientId) || null;
   const selectedCase = selectedRow?.clientCases.find((item) => item.case_id === selectedCaseId)
@@ -802,26 +791,7 @@ export default function IsirView({
       )}
 
       <div className="rounded-xl border-2 border-slate-400 bg-white/[0.96] p-3 shadow-[0_3px_12px_rgba(15,23,42,0.12)]">
-        <div className="grid gap-2 lg:grid-cols-[minmax(260px,1fr)_220px_auto]">
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Hledat klienta, ID nebo spis…" className="h-9 w-full rounded-md border border-slate-300 bg-white pl-10 pr-9 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" />
-            {query && <button type="button" onClick={() => setQuery('')} className="absolute right-3 top-2.5 text-slate-400"><X className="h-4 w-4" /></button>}
-          </label>
-          <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-600">
-            <Filter className="h-4 w-4" />
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="h-8 min-w-0 flex-1 bg-transparent text-xs font-bold outline-none">
-              <option value="client">Řadit podle klienta</option>
-              <option value="status">Řadit podle stavu</option>
-              <option value="case">Řadit podle spisu</option>
-              <option value="checked">Řadit podle kontroly</option>
-            </select>
-          </label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900">
-            <input type="checkbox" checked={onlyNew} onChange={(event) => setOnlyNew(event.target.checked)} /> Jen s novými dokumenty
-          </label>
-        </div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           {[
             ['none', 'Bez řízení'],
             ['open', 'Nevyřízená'],
