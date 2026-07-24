@@ -108,6 +108,14 @@ function doPost(e) {
         insolvencyVerification: verifyClientInsolvency_(payload.client_id, context)
       });
     }
+    if (action === 'verifyProjectInsolvencies') {
+      return jsonResponse_({
+        ok: true,
+        batch: verifyProjectInsolvenciesBatch_(context, {
+          offset: payload.offset
+        })
+      });
+    }
     if (action === 'rebuildLegacyBridge') {
       context = assertProjectAccess_(payload.actor_id, projectId, ['GARANT', 'ADMIN']);
       return jsonResponse_({

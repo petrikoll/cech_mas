@@ -121,7 +121,10 @@ function ReportingView({
   backupStatus = null,
   isBackupActionRunning = false,
   handleStartFullBackup,
-  handleInstallWeeklyBackup
+  handleInstallWeeklyBackup,
+  handleVerifyProjectInsolvencies,
+  isVerifyingProjectInsolvencies = false,
+  projectInsolvencyNotice = ''
 }) {
   const fulfillment = projectDashboard || { indicators: [], goals: [], outputPercent: 0, resultPercent: 0, goalsPercent: 0 };
   const tone = PROJECT_TONES[activeProjectId] || PROJECT_TONES.CECH;
@@ -143,7 +146,17 @@ function ReportingView({
             <h1 className="mt-3 text-2xl font-black tracking-tight text-slate-950">Plnění indikátorů a cílů</h1>
             <p className="mt-1 text-sm text-slate-600">Rychlý přehled aktuálního plnění vůči cílovým hodnotám.</p>
           </div>
-          <div className={`hidden rounded-2xl p-3 sm:block ${tone.icon}`}><Target className="h-7 w-7" /></div>
+          <button
+            type="button"
+            onClick={handleVerifyProjectInsolvencies}
+            disabled={isVerifyingProjectInsolvencies}
+            className={`inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-extrabold transition hover:brightness-95 disabled:cursor-wait disabled:opacity-60 ${tone.badge}`}
+          >
+            {isVerifyingProjectInsolvencies
+              ? <Loader2 className="h-5 w-5 animate-spin" />
+              : <ShieldCheck className="h-5 w-5" />}
+            {isVerifyingProjectInsolvencies ? 'Probíhá hromadná kontrola ISIR…' : 'Hromadně ověřit klienty v ISIR'}
+          </button>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-3">
@@ -151,6 +164,11 @@ function ReportingView({
           <SummaryCard label="Výsledkové indikátory" accessibleLabel="Plnění indikátorů výsledků celkem v %" value={fulfillment.resultPercent} icon={BarChart3} tone={tone} />
           <SummaryCard label="Projektové cíle" accessibleLabel="Plnění cílů celkem v %" value={fulfillment.goalsPercent} icon={CheckCircle2} tone={tone} />
         </div>
+        {projectInsolvencyNotice && (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">
+            {projectInsolvencyNotice}
+          </div>
+        )}
       </section>
 
       <section>

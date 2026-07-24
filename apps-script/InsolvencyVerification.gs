@@ -143,6 +143,56 @@ function verifyClientInsolvency_(clientId, context) {
   return verification;
 }
 
+function verifyProjectInsolvenciesBatch_(context, options) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const input = options || {};
+    const offset = Math.max(0, Number(input.offset) || 0);
+    const indexByNumber = readDataObjects_(DATA_SHEETS.clientIndex).reduce((map, row) => {
+      map[String(Number(row.client_number))] = row;
+      return map;
+    }, {});
+    const projectClients = getRegistryRows_()
+      .map((row, index) => registryRowToClient_(row, index + 2, indexByNumber))
+      .filter((client) => client && client.project_id === context.projectId)
+      .sort((left, right) => Number(left.client_number) - Number(right.client_number));
+    const eligibleClients = projectClients.filter((client) =>
+      client.klient_id && client.jmeno && client.prijmeni && client.datum_narozeni
+    );
+    const candidates = eligibleClients.slice(offset, offset + ISIR_DAILY_BATCH_SIZE);
+    const verifications = [];
+    let failed = 0;
+
+    candidates.forEach((client, index) => {
+      if (index > 0) Utilities.sleep(ISIR_REQUEST_DELAY_MS);
+      try {
+        verifications.push(verifyClientInsolvency_(client.klient_id, context));
+      } catch (error) {
+        failed += 1;
+        writeAudit_(context, 'VERIFY_ISIR', 'CLIENT', client.klient_id, 'ERROR', error.message);
+      }
+    });
+
+    const processedTo = offset + candidates.length;
+    return {
+      ok: true,
+      project_id: context.projectId,
+      totalClients: projectClients.length,
+      totalEligible: eligibleClients.length,
+      missingIdentity: projectClients.length - eligibleClients.length,
+      checked: candidates.length,
+      verified: verifications.length,
+      matched: verifications.filter((item) => isTruthy_(item.matched)).length,
+      failed,
+      nextOffset: processedTo < eligibleClients.length ? processedTo : null,
+      verifications
+    };
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function installDailyInsolvencyVerificationTrigger() {
   ScriptApp.getProjectTriggers()
     .filter((trigger) => trigger.getHandlerFunction() === 'scheduledDailyInsolvencyVerification')

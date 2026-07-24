@@ -2183,6 +2183,8 @@ function App() {
   const [isProvisioningClientFolder, setIsProvisioningClientFolder] = useState(false);
   const [isSummarizingCase, setIsSummarizingCase] = useState(false);
   const [isVerifyingInsolvency, setIsVerifyingInsolvency] = useState(false);
+  const [isVerifyingProjectInsolvencies, setIsVerifyingProjectInsolvencies] = useState(false);
+  const [projectInsolvencyNotice, setProjectInsolvencyNotice] = useState('');
   const [statusMessage, setStatusMessage] = useState('');
   const [copied, setCopied] = useState(false);
   const [clientCaseSummary, setClientCaseSummary] = useState('');
@@ -4377,6 +4379,68 @@ function App() {
       setFlash(saveErrorMessage('Ověření v ISIR se nezdařilo', error));
     } finally {
       setIsVerifyingInsolvency(false);
+    }
+  };
+
+  const verifyProjectInsolvencies = async () => {
+    if (isVerifyingProjectInsolvencies) return;
+    setIsVerifyingProjectInsolvencies(true);
+    setProjectInsolvencyNotice(`Připravuji hromadnou kontrolu klientů projektu ${activeProjectId}…`);
+    try {
+      let offset = 0;
+      let totalChecked = 0;
+      let totalMatched = 0;
+      let totalFailed = 0;
+      let missingIdentity = 0;
+      let totalEligible = 0;
+      const receivedRows = [];
+
+      for (let batchNumber = 0; batchNumber < 20; batchNumber += 1) {
+        const result = await postGoogleSheetAction({
+          action: 'verifyProjectInsolvencies',
+          offset
+        });
+        const batch = result?.batch;
+        if (!batch) throw new Error('ISIR nevrátil výsledek hromadné kontroly.');
+        receivedRows.push(...(Array.isArray(batch.verifications) ? batch.verifications : []));
+        totalChecked += Number(batch.verified || 0);
+        totalMatched += Number(batch.matched || 0);
+        totalFailed += Number(batch.failed || 0);
+        missingIdentity = Number(batch.missingIdentity || 0);
+        totalEligible = Number(batch.totalEligible || 0);
+        setProjectInsolvencyNotice(
+          `ISIR: ověřeno ${totalChecked} z ${totalEligible} klientů projektu ${activeProjectId}…`
+        );
+        if (batch.nextOffset === null || batch.nextOffset === undefined) break;
+        offset = Number(batch.nextOffset);
+      }
+
+      const mapped = mapSheetRecordsToAppRecords({
+        insolvencyVerifications: receivedRows
+      }, clientIndex);
+      if (mapped.length) {
+        const ids = new Set(mapped.map((record) => record.id));
+        setRecords((previous) => [
+          ...mapped,
+          ...previous.filter((record) => !ids.has(record.id))
+        ].sort(compareTimelineRecordsDesc));
+      }
+
+      const summary = [
+        `ISIR dokončen: ověřeno ${totalChecked} klientů`,
+        `započitatelná insolvence u ${totalMatched}`,
+        totalFailed ? `chyb ${totalFailed}` : '',
+        missingIdentity ? `bez úplné identity ${missingIdentity}` : ''
+      ].filter(Boolean).join(' · ');
+      setProjectInsolvencyNotice(summary);
+      setFlash(summary);
+    } catch (error) {
+      console.error('Bulk ISIR verification failed:', error);
+      const message = saveErrorMessage('Hromadná kontrola ISIR se nezdařila', error);
+      setProjectInsolvencyNotice(message);
+      setFlash(message);
+    } finally {
+      setIsVerifyingProjectInsolvencies(false);
     }
   };
 
@@ -7776,6 +7840,9 @@ ${rawPlanOutput}` }] }],
               isBackupActionRunning={isBackupActionRunning}
               handleStartFullBackup={handleStartFullBackup}
               handleInstallWeeklyBackup={handleInstallWeeklyBackup}
+              handleVerifyProjectInsolvencies={verifyProjectInsolvencies}
+              isVerifyingProjectInsolvencies={isVerifyingProjectInsolvencies}
+              projectInsolvencyNotice={projectInsolvencyNotice}
             />
           </React.Suspense>
         )}

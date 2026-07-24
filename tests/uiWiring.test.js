@@ -120,3 +120,9 @@ test('dashboard sleduje jen smluvené indikátory a projektové cíle', () => {
   assert.doesNotMatch(reportingSource, /Dlouhodobá podpora/);
   assert.doesNotMatch(reportingSource, /Individuální plán/);
 });
+
+test('dashboard spouští hromadnou kontrolu klientů v ISIR', () => {
+  assert.match(reportingSource, /Hromadně ověřit klienty v ISIR/);
+  assert.match(appSource, /verifyProjectInsolvencies/);
+  assert.match(appSource, /isVerifyingProjectInsolvencies/);
+});

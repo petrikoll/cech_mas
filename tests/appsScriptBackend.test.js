@@ -91,6 +91,8 @@ test('automatické ověření ISIR dodržuje denní stáří a bezpečnou veliko
   assert.match(insolvencyVerificationSource, /ISIR_REQUEST_DELAY_MS = 1300/);
   assert.match(insolvencyVerificationSource, /everyHours\(1\)/);
   assert.match(insolvencyVerificationSource, /scheduledDailyInsolvencyVerification/);
+  assert.match(insolvencyVerificationSource, /verifyProjectInsolvenciesBatch_/);
+  assert.match(insolvencyVerificationSource, /nextOffset/);
 });
 
 test('číslování vychází pouze z obsazených klientských řádků', () => {
