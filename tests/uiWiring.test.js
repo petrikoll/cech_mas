@@ -36,6 +36,11 @@ test('formulář výkonů KA1 používá existující stav ukládání', () => {
   assert.match(appSource, /<Ka02View[\s\S]*?isSaving=\{isSaving\}/);
 });
 
+test('uložení výkonu KA1 předává backendu vybrané činnosti a přesnou délku', () => {
+  assert.match(appSource, /activity_codes_json: JSON\.stringify\(payload\.activityCodes \|\| \[\]\)/);
+  assert.match(appSource, /duration_minutes: payload\.durationMinutes \|\| ''/);
+});
+
 test('KA1 performance form is bundled with the main React runtime', () => {
   assert.match(appSource, /import Ka02View from '\.\/Ka02View\.jsx';/);
   assert.doesNotMatch(appSource, /const Ka02View = React\.lazy/);
