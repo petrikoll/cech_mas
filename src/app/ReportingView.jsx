@@ -193,22 +193,21 @@ function ReportingView({
 
       <Panel
         title="Nástroje reportingu"
-        description="Projektové indikátory a cíle výše jsou kumulativní. Filtry slouží pro exporty a texty ZOR."
+        description="Projektové indikátory a cíle výše jsou kumulativní. Exporty klientské podpory zahrnují pouze KA1."
         icon={Activity}
         action={
           <div className="flex flex-wrap gap-2">
             <button onClick={exportClientsCsv} className="inline-flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-100">
-              <FileSpreadsheet className="h-4 w-4" /> Klienti a podpora do IS ESF
+              <FileSpreadsheet className="h-4 w-4" /> Klienti a podpora KA1 do IS ESF
             </button><HelpIcon help={HELP.dashboardExport} />
             <button onClick={exportAllRecordsBackup} className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50">
-              <Archive className="h-4 w-4" /> Stáhnout zápisy ({supportExportCount || 0})
+              <Archive className="h-4 w-4" /> Stáhnout zápisy podpory KA1 ({supportExportCount || 0})
             </button>
           </div>
         }
       >
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid gap-3 md:grid-cols-3">
           <SelectField label="Vykazované období" help={HELP.dashboardPeriod} value={dashboardFilters.period} onChange={(value) => setDashboardFilters((prev) => ({ ...prev, period: value }))} options={REPORTING_PERIODS.map((period) => ({ value: period.value, label: period.label }))} />
-          <SelectField label="Klíčová aktivita" value={dashboardFilters.ka} onChange={(value) => setDashboardFilters((prev) => ({ ...prev, ka: value }))} options={[{ value: 'all', label: 'Všechny KA' }, { value: 'KA1', label: 'KA1' }, { value: 'KA2', label: 'KA2' }]} />
           <SelectField label="Pracovník" value={dashboardFilters.worker} onChange={(value) => setDashboardFilters((prev) => ({ ...prev, worker: value }))} options={[{ value: 'all', label: 'Všichni pracovníci' }].concat(WORKERS.map((worker) => ({ value: worker, label: worker })))} />
           <div className="flex flex-col justify-end">
             <button type="button" onClick={handleGenerateZorTexts} disabled={dashboardFilters.period === 'all' || isGeneratingZor} className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400">

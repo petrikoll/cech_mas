@@ -6028,6 +6028,8 @@ ${rawOutput}` }] }],
     const seen = new Set();
     return (sourceRecords || []).filter((record) => {
       if (record.isSynthetic || record.entityType !== 'consultations') return false;
+      const normalizedKa = String(record.ka || '').trim().toUpperCase();
+      if (!['KA1', 'KA01'].includes(normalizedKa) || record.payload?.caseManagementMode) return false;
       const clientIds = Array.isArray(record.clientIds) ? record.clientIds : record.clientId ? [record.clientId] : [];
       if (!clientIds.length) return false;
       const payload = record.payload || {};
@@ -6056,13 +6058,11 @@ ${rawOutput}` }] }],
     const minutesFor = (predicate) => supportRecords
       .filter(predicate)
       .reduce((sum, record) => sum + Number(record.payload?.durationMinutes || 0), 0);
-    const isKa2 = (record) => String(record.ka || '').toUpperCase() === 'KA2' || Boolean(record.payload?.caseManagementMode);
     const totalMinutes = minutesFor(() => true);
     return {
       supportCount: supportRecords.length,
       totalHours: totalMinutes / 60,
-      ka1Hours: minutesFor((record) => !isKa2(record)) / 60,
-      ka2Hours: minutesFor(isKa2) / 60
+      ka1Hours: totalMinutes / 60
     };
   };
   const exportActivitiesCsv = () => {
@@ -6102,7 +6102,6 @@ ${rawOutput}` }] }],
         stats.supportCount,
         formatHoursForExport(stats.totalHours),
         formatHoursForExport(stats.ka1Hours),
-        formatHoursForExport(stats.ka2Hours),
         supportCategory
       ];
     });
@@ -6123,7 +6122,6 @@ ${rawOutput}` }] }],
         'Počet zápisů podpory',
         'Celková podpora',
         'Podpora KA1',
-        'Podpora KA2',
         'Kategorie podpory'
       ],
       rows,

@@ -60,6 +60,15 @@ test('kontrola ISIR bezpečně opakuje dočasné chyby brány', () => {
   assert.match(appSource, /const maxAttempts = isRetrySafeAction \? 3 : 1/);
 });
 
+test('exporty klientské podpory zahrnují pouze KA1', () => {
+  assert.match(appSource, /\['KA1', 'KA01'\]\.includes\(normalizedKa\)/);
+  assert.match(appSource, /record\.payload\?\.caseManagementMode/);
+  assert.doesNotMatch(appSource, /'Podpora KA2'/);
+  assert.match(reportingSource, /Klienti a podpora KA1 do IS ESF/);
+  assert.match(reportingSource, /Stáhnout zápisy podpory KA1/);
+  assert.doesNotMatch(reportingSource, /label: 'KA2'/);
+});
+
 test('KA1 performance form is bundled with the main React runtime', () => {
   assert.match(appSource, /import Ka02View from '\.\/Ka02View\.jsx';/);
   assert.doesNotMatch(appSource, /const Ka02View = React\.lazy/);
