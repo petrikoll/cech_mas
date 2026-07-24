@@ -75,6 +75,8 @@ test('přehled klienta v KA1 přepíná výkony a splátkové kalendáře', () =
   assert.match(appSource, /action: 'savePaymentPlan'/);
   assert.match(ka1PerformanceSource, /useState\('payment-plans'\)/);
   assert.match(paymentCalendarsSource, /Smazat kalendář/);
+  assert.match(appSource, /Ano, smazat/);
+  assert.match(appSource, /pendingDeleteRecord/);
   assert.match(paymentCalendarsSource, /setTimeout\(\s*\(\) => persistQueuedStatuses\(record\),\s*650/);
   assert.match(appSource, /action = 'deletePaymentPlan'/);
 });

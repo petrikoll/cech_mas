@@ -367,6 +367,7 @@ test('backend splátkových kalendářů normalizuje měsíce a sestaví harmono
 test('splátkový kalendář lze bezpečně skrýt s auditní stopou', () => {
   assert.match(source, /action === 'deletePaymentPlan'/);
   assert.match(source, /function deletePaymentPlan_/);
+  assert.match(source, /already_missing: true/);
   assert.match(source, /status: 'DELETED'/);
   assert.match(source, /String\(row\.status \|\| ''\)\.toUpperCase\(\) !== 'DELETED'/);
   assert.match(source, /writeAudit_\(context, 'DELETE', 'PAYMENT_PLAN'/);

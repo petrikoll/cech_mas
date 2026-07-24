@@ -2226,6 +2226,7 @@ function App() {
   const [aiGenerationStatus, setAiGenerationStatus] = useState('idle');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [pendingDeleteRecord, setPendingDeleteRecord] = useState(null);
   const [backupStatus, setBackupStatus] = useState({ state: 'idle', message: 'Záloha zatím nebyla vytvořena.' });
   const [isBackupActionRunning, setIsBackupActionRunning] = useState(false);
   const [saveNotice, setSaveNotice] = useState(null);
@@ -4236,15 +4237,12 @@ function App() {
     }
   };
 
-  const deleteRecord = async (record) => {
+  const performDeleteRecord = async (record) => {
     if (!record?.id) return;
     if (record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM') {
       setFlash('Historický výkon z XLSM je v aplikaci pouze pro čtení.');
       return;
     }
-    const confirmed = window.confirm(`Opravdu smazat záznam "${record.title || 'bez názvu'}"?`);
-    if (!confirmed) return;
-
     setIsSaving(true);
     const previousRecords = records;
     const nextRecords = records.filter((item) => item.id !== record.id);
@@ -4266,6 +4264,22 @@ function App() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const deleteRecord = (record) => {
+    if (!record?.id) return;
+    if (record.isLegacyReadOnly || record.sourceSystem === 'LEGACY_XLSM') {
+      setFlash('Historický výkon z XLSM je v aplikaci pouze pro čtení.');
+      return;
+    }
+    setPendingDeleteRecord(record);
+  };
+
+  const confirmDeleteRecord = async () => {
+    const record = pendingDeleteRecord;
+    if (!record || isSaving) return;
+    setPendingDeleteRecord(null);
+    await performDeleteRecord(record);
   };
 
   const handleClientCreate = async () => {
@@ -7962,6 +7976,51 @@ ${rawPlanOutput}` }] }],
           </React.Suspense>
         )}
       </main>
+
+      {pendingDeleteRecord && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !isSaving) setPendingDeleteRecord(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-record-dialog-title"
+            className="w-full max-w-md rounded-2xl border border-rose-200 bg-white p-5 shadow-2xl"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <h2 id="delete-record-dialog-title" className="text-lg font-extrabold text-slate-950">
+              Smazat {pendingDeleteRecord.entityType === 'payment_plan' ? 'splátkový kalendář' : 'záznam'}?
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-600">
+              {pendingDeleteRecord.entityType === 'payment_plan'
+                ? 'Kalendář bude odstraněn z aplikace i z datové tabulky.'
+                : `Opravdu chcete odstranit „${pendingDeleteRecord.title || 'záznam bez názvu'}“?`}
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteRecord(null)}
+                disabled={isSaving}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Zrušit
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteRecord}
+                disabled={isSaving}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+              >
+                {isSaving ? 'Mažu…' : 'Ano, smazat'}
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
 
       {showClientEditForm && selectedClient && (
         <div

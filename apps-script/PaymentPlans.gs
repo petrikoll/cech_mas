@@ -371,7 +371,10 @@ function deletePaymentPlan_(planId, context) {
     const existing = readDataObjects_(DATA_SHEETS.paymentPlans).find((row) =>
       String(row.plan_id || '') === String(planId || '')
     );
-    if (!existing) throw new Error('Splátkový kalendář nebyl nalezen.');
+    if (!existing) {
+      writeAudit_(context, 'DELETE', 'PAYMENT_PLAN', planId, 'OK', 'Kalendář již v datech nebyl.');
+      return { plan_id: planId, status: 'DELETED', already_missing: true };
+    }
     if (requireProjectId_(existing.project_id) !== context.projectId) {
       throw new Error('Splátkový kalendář patří do jiného projektu.');
     }

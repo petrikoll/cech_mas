@@ -18,7 +18,7 @@ const PROJECTS = Object.freeze({
       idle: 'border-transparent bg-transparent text-slate-500 hover:border-indigo-100 hover:bg-indigo-50/70 hover:text-indigo-800',
       badge: 'border-indigo-100 bg-indigo-50/80 text-indigo-700',
       page: 'bg-[radial-gradient(circle_at_top_left,#eef2ff_0,#f8faff_32%,#fbfdff_68%,#ffffff_100%)]',
-      header: 'border-indigo-100/80 bg-white/90',
+      header: 'border-stone-200/90 bg-[#eadfce]/95',
       ambient: 'bg-indigo-200/20',
       label: 'text-indigo-600'
     })
@@ -37,7 +37,7 @@ const PROJECTS = Object.freeze({
       idle: 'border-transparent bg-transparent text-slate-500 hover:border-emerald-100 hover:bg-emerald-50/70 hover:text-emerald-800',
       badge: 'border-emerald-100 bg-emerald-50/80 text-emerald-700',
       page: 'bg-[radial-gradient(circle_at_top_left,#ecfdf5_0,#f7fdf9_32%,#fbfefc_68%,#ffffff_100%)]',
-      header: 'border-emerald-100/80 bg-white/90',
+      header: 'border-stone-200/90 bg-[#eadfce]/95',
       ambient: 'bg-emerald-200/20',
       label: 'text-emerald-600'
     })
