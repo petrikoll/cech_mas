@@ -16,6 +16,7 @@ vite.err
 migration-backup-*/
 migration-local/
 reference-old-*/
+.reference-isir-*/
 *.xlsx
 
 # Lokální analytické podklady mohou obsahovat osobní údaje.

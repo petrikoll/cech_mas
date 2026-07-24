@@ -43,13 +43,6 @@ const formatCompactDate = (value) => {
   return match ? `${match[3]}.${match[2]}.${match[1]}` : '—';
 };
 
-const formatMoney = (value) => {
-  const numeric = Number(value);
-  return Number.isFinite(numeric)
-    ? new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 2 }).format(numeric)
-    : '—';
-};
-
 const isTruthy = (value) => /^(ano|true|1)$/i.test(String(value || ''));
 const normalizedStatus = (value) => String(value || '').trim().toLocaleUpperCase('cs') || 'BEZ ŘÍZENÍ';
 const isDebtRelief = (value) => /ODDLUŽEN/i.test(normalizedStatus(value));
@@ -59,6 +52,69 @@ const safeParse = (value, fallback = {}) => {
   if (value && typeof value === 'object') return value;
   try { return JSON.parse(String(value || '')); } catch { return fallback; }
 };
+
+const parseMarkedSections = (value) => {
+  const source = String(value || '').replace(/\r\n?/g, '\n').trim();
+  const matches = [...source.matchAll(/\[\[SECTION:([^:\]]+):([^\]]+)\]\]/g)];
+  if (!matches.length) {
+    return source ? [{ key: 'content', title: 'Obsah', body: source }] : [];
+  }
+  return matches.map((match, index) => ({
+    key: match[1],
+    title: match[2],
+    body: source
+      .slice(match.index + match[0].length, matches[index + 1]?.index ?? source.length)
+      .trim()
+  }));
+};
+
+const cleanAiLine = (value) => String(value || '').replace(/\*\*/g, '').trim();
+
+function RichAiText({ value }) {
+  const lines = String(value || '').replace(/\r\n?/g, '\n').split('\n');
+  const blocks = [];
+  let list = [];
+  const flushList = () => {
+    if (!list.length) return;
+    blocks.push(
+      <ul key={`list-${blocks.length}`} className="list-disc space-y-1 pl-5">
+        {list.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}
+      </ul>
+    );
+    list = [];
+  };
+  lines.forEach((rawLine) => {
+    const line = cleanAiLine(rawLine);
+    if (!line) {
+      flushList();
+      return;
+    }
+    const bullet = line.match(/^[-•]\s+(.*)$/);
+    if (bullet) {
+      list.push(cleanAiLine(bullet[1]));
+      return;
+    }
+    flushList();
+    const heading = line.length <= 80
+      && (/^#{1,4}\s+/.test(line) || /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ0-9][^:]{2,70}:\s*$/.test(line));
+    if (heading) {
+      blocks.push(
+        <h4 key={`heading-${blocks.length}`} className="mt-4 text-xs font-black text-slate-950 first:mt-0">
+          {line.replace(/^#{1,4}\s+/, '').replace(/:\s*$/, '')}
+        </h4>
+      );
+      return;
+    }
+    const label = line.match(/^([^:\n]{2,60}:)\s*(.*)$/);
+    blocks.push(
+      <p key={`paragraph-${blocks.length}`}>
+        {label ? <><strong className="text-slate-900">{label[1]}</strong>{label[2] ? ` ${label[2]}` : ''}</> : line}
+      </p>
+    );
+  });
+  flushList();
+  return <div className="space-y-2">{blocks.length ? blocks : <p>Bez obsahu.</p>}</div>;
+}
 
 const getPdfPreviewUrl = (document) => {
   const sourceUrl = String(document?.source_url || '');
@@ -85,24 +141,6 @@ const statusTone = (status) => {
   return 'bg-amber-50 text-amber-800 ring-amber-200';
 };
 
-function AnalysisList({ items, empty = 'Neuvedeno' }) {
-  if (!Array.isArray(items) || !items.length) return <p className="text-sm text-slate-500">{empty}</p>;
-  return (
-    <ul className="space-y-2 text-sm leading-6 text-slate-700">
-      {items.map((item, index) => {
-        const label = typeof item === 'string' ? item : item.label || item.event || '';
-        const date = typeof item === 'object' ? item.date : '';
-        return (
-          <li key={`${date}-${label}-${index}`} className="flex gap-2">
-            <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-sky-600" />
-            <span>{date ? <strong>{formatDate(date)} – </strong> : null}{label}</span>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 export default function IsirView({
   clients = [],
   cases = [],
@@ -117,7 +155,6 @@ export default function IsirView({
   onCheckProject,
   onArchiveDocument,
   onAnalyzeDocuments,
-  onApplyDataCorrections,
   onMarkDocumentsSeen,
   onExportCaseStudy,
   onImportLegacyData,
@@ -135,11 +172,13 @@ export default function IsirView({
   const [previewDocumentId, setPreviewDocumentId] = useState('');
   const [archivingDocumentId, setArchivingDocumentId] = useState('');
   const [analysisTab, setAnalysisTab] = useState('current');
-  const [localAnalysisByCase, setLocalAnalysisByCase] = useState({});
-  const [localVerificationByCase, setLocalVerificationByCase] = useState({});
-  const [selectedCorrectionFields, setSelectedCorrectionFields] = useState([]);
-  const [isApplyingCorrections, setIsApplyingCorrections] = useState(false);
+  const [floatingSummary, setFloatingSummary] = useState(null);
+  const [floatingSummaryTab, setFloatingSummaryTab] = useState('summary');
+  const [isFloatingSummaryMinimized, setIsFloatingSummaryMinimized] = useState(false);
+  const [floatingSummaryPosition, setFloatingSummaryPosition] = useState(null);
   const importInputRef = useRef(null);
+  const floatingSummaryPanelRef = useRef(null);
+  const floatingSummaryDragRef = useRef(null);
 
   const verificationByClient = useMemo(
     () => Object.fromEntries(verifications.map((item) => [String(item.client_id), item])),
@@ -168,20 +207,8 @@ export default function IsirView({
       .forEach((item) => {
         if (!map[item.case_id]) map[item.case_id] = item;
       });
-    return { ...map, ...localAnalysisByCase };
-  }, [analyses, localAnalysisByCase]);
-  const latestVerificationByCase = useMemo(() => {
-    const map = {};
-    analyses
-      .filter((item) => item.kind === 'DATA_VERIFICATION')
-      .slice()
-      .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
-      .forEach((item) => {
-        if (!map[item.case_id]) map[item.case_id] = item;
-      });
-    return { ...map, ...localVerificationByCase };
-  }, [analyses, localVerificationByCase]);
-
+    return map;
+  }, [analyses]);
   const clientRows = useMemo(() => clients.map((client) => {
     const clientCases = (casesByClient[client.id] || [])
       .slice()
@@ -239,10 +266,6 @@ export default function IsirView({
       String(right.event_date || '').localeCompare(String(left.event_date || '')))
     : [];
   const selectedAnalysis = selectedCase ? latestAnalysisByCase[selectedCase.case_id] || null : null;
-  const selectedVerification = selectedCase ? latestVerificationByCase[selectedCase.case_id] || null : null;
-  const selectedVerificationResult = selectedVerification?.result
-    || safeParse(selectedVerification?.result_json, {});
-  const dataVerification = selectedVerificationResult.data_verification || {};
   const parsedAnalysisResult = selectedAnalysis?.result
     || safeParse(selectedAnalysis?.result_json || selectedCase?.ai_summary_json, {});
   const legacyCaseStudy = selectMostCompleteCaseStudy(
@@ -256,14 +279,34 @@ export default function IsirView({
     finances: parsedAnalysisResult.finances || {},
     case_study: legacyCaseStudy
   };
-  const documentSummaries = selectedCaseDocuments
-    .map((document) => {
-      const summary = safeParse(document.analysis_json, {});
-      return summary?.summary_text
-        ? { ...summary, document_id: document.document_id, title: summary.title || document.title }
-        : null;
-    })
-    .filter(Boolean);
+  const caseStudySections = parseMarkedSections(legacyCaseStudy);
+  const activeCaseStudySection = caseStudySections.find((section) => section.key === analysisTab)
+    || caseStudySections[0]
+    || null;
+  const floatingSummarySections = parseMarkedSections(floatingSummary?.summary_text);
+  const activeFloatingSummarySection = floatingSummarySections
+    .find((section) => section.key === floatingSummaryTab)
+    || floatingSummarySections[0]
+    || null;
+  const documentSummaries = selectedCase
+    ? analyses
+      .filter((item) => item.case_id === selectedCase.case_id && item.kind === 'DOCUMENT_SUMMARY')
+      .slice()
+      .sort((left, right) => String(right.created_at || '').localeCompare(String(left.created_at || '')))
+      .map((item) => {
+        const result = item.result || safeParse(item.result_json, {});
+        const summary = result.document_summary;
+        return summary?.summary_text
+          ? {
+            ...summary,
+            id: item.analysis_id,
+            created_at: item.created_at,
+            title: summary.title || 'Shrnutí vybraných dokumentů'
+          }
+          : null;
+      })
+      .filter(Boolean)
+    : [];
 
   const checkedCount = clientRows.filter((row) => row.verification).length;
   const foundCount = clientRows.filter((row) => row.clientCases.length).length;
@@ -287,70 +330,60 @@ export default function IsirView({
 
   const runAnalysis = async () => {
     const chosen = selectedCaseDocuments.filter((item) => selectedDocumentIds.includes(item.document_id));
-    const documentAnalysis = await onAnalyzeDocuments({
+    const analysis = await onAnalyzeDocuments({
       client: selectedRow.client,
       caseItem: selectedCase,
       documents: chosen,
+      contextDocuments: selectedCaseDocuments,
       mode: 'document-summary'
     });
-    const summaryById = Object.fromEntries(
-      (documentAnalysis?.result?.document_summaries || [])
-        .map((item) => [String(item.document_id), item])
-    );
-    const analysis = await onAnalyzeDocuments({
-      client: selectedRow.client,
-      caseItem: selectedCase,
-      documents: chosen.map((document) => ({
-        ...document,
-        analysis_json: summaryById[String(document.document_id)]
-          ? JSON.stringify(summaryById[String(document.document_id)])
-          : document.analysis_json
-      })),
-      mode: 'case-study'
-    });
-    setLocalAnalysisByCase((previous) => ({ ...previous, [selectedCase.case_id]: analysis }));
-    setAnalysisTab('current');
-  };
-
-  const runDataVerification = async () => {
-    const mainDocuments = selectedCaseDocuments.filter((item) => isTruthy(item.is_main));
-    const chosen = (mainDocuments.length ? mainDocuments : selectedCaseDocuments)
-      .slice()
-      .sort((left, right) => {
-        const leftPriority = /přihláška.*pohledáv|přezkum|plnění|splnění|vyúčtování/i.test(left.title || '') ? 1 : 0;
-        const rightPriority = /přihláška.*pohledáv|přezkum|plnění|splnění|vyúčtování/i.test(right.title || '') ? 1 : 0;
-        return rightPriority - leftPriority || String(right.event_date || '').localeCompare(String(left.event_date || ''));
-      })
-      .slice(0, 10);
-    if (!chosen.length) throw new Error('Pro kontrolu nejsou k dispozici žádné hlavní dokumenty.');
-    const analysis = await onAnalyzeDocuments({
-      client: selectedRow.client,
-      caseItem: selectedCase,
-      documents: chosen,
-      mode: 'data-verification'
-    });
-    setLocalVerificationByCase((previous) => ({ ...previous, [selectedCase.case_id]: analysis }));
-    const corrections = analysis?.result?.data_verification?.recommended_corrections || [];
-    setSelectedCorrectionFields(corrections.map((item) => item.field));
-  };
-
-  const applyCorrections = async () => {
-    const corrections = (dataVerification.recommended_corrections || [])
-      .filter((item) => selectedCorrectionFields.includes(item.field));
-    if (!corrections.length) return;
-    setIsApplyingCorrections(true);
-    try {
-      await onApplyDataCorrections({ caseItem: selectedCase, corrections });
-      setSelectedCorrectionFields([]);
-    } finally {
-      setIsApplyingCorrections(false);
+    const summary = analysis?.result?.document_summary;
+    if (summary?.summary_text) {
+      setFloatingSummary({
+        ...summary,
+        id: analysis.analysis_id,
+        created_at: analysis.created_at,
+        title: summary.title || 'Shrnutí vybraných dokumentů'
+      });
+      setFloatingSummaryTab('summary');
+      setIsFloatingSummaryMinimized(false);
     }
+    setSelectedDocumentIds([]);
   };
 
   const archiveDocument = async (documentId) => {
     setArchivingDocumentId(documentId);
     try { await onArchiveDocument(documentId); }
     finally { setArchivingDocumentId(''); }
+  };
+
+  const startFloatingSummaryDrag = (event) => {
+    if (event.target.closest('button') || !floatingSummaryPanelRef.current) return;
+    const rect = floatingSummaryPanelRef.current.getBoundingClientRect();
+    floatingSummaryDragRef.current = {
+      pointerId: event.pointerId,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveFloatingSummary = (event) => {
+    const drag = floatingSummaryDragRef.current;
+    const panel = floatingSummaryPanelRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || !panel) return;
+    const rect = panel.getBoundingClientRect();
+    setFloatingSummaryPosition({
+      left: Math.max(8, Math.min(event.clientX - drag.offsetX, window.innerWidth - rect.width - 8)),
+      top: Math.max(8, Math.min(event.clientY - drag.offsetY, window.innerHeight - rect.height - 8))
+    });
+  };
+
+  const stopFloatingSummaryDrag = (event) => {
+    if (floatingSummaryDragRef.current?.pointerId === event.pointerId) {
+      floatingSummaryDragRef.current = null;
+      event.currentTarget.releasePointerCapture?.(event.pointerId);
+    }
   };
 
   const importLegacyBundle = async (event) => {
@@ -452,71 +485,12 @@ export default function IsirView({
                     <h3 className="text-base font-black text-slate-800">Dokumenty</h3>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-extrabold text-slate-500">Vybráno: {selectedDocumentIds.length}</span>
-                      <button
-                        type="button"
-                        onClick={runDataVerification}
-                        disabled={isAnalyzing || !selectedCaseDocuments.length}
-                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-sky-200 bg-sky-50 px-3 text-xs font-extrabold text-sky-800 hover:bg-sky-100 disabled:opacity-60"
-                      >
-                        <ShieldAlert className="h-3.5 w-3.5" />
-                        Zkontrolovat údaje
-                      </button>
                       <button type="button" onClick={runAnalysis} disabled={!selectedDocumentIds.length || isAnalyzing || selectedDocumentIds.length > 10} className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-[#dcc5a9] bg-[#f6f2ec] px-3 text-xs font-extrabold text-slate-600 hover:bg-[#efe7dc] disabled:cursor-not-allowed disabled:opacity-60">
                         {isAnalyzing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
                         Vytvořit AI shrnutí
                       </button>
                     </div>
                   </div>
-                  {selectedVerification && (
-                    <div className="border-t border-sky-100 bg-sky-50/60 px-4 py-3">
-                      <div className="flex flex-wrap items-start justify-between gap-3">
-                        <div>
-                          <p className="text-[10px] font-extrabold uppercase tracking-wide text-sky-700">Kontrolní návrhy změn údajů</p>
-                          <p className="mt-1 text-xs text-slate-700">
-                            {dataVerification.safe_summary || dataVerification.overall_result || 'Kontrola byla dokončena.'}
-                          </p>
-                        </div>
-                        {(dataVerification.recommended_corrections || []).length > 0 && (
-                          <button
-                            type="button"
-                            onClick={applyCorrections}
-                            disabled={isApplyingCorrections || !selectedCorrectionFields.length}
-                            className="inline-flex items-center gap-1.5 rounded-lg bg-sky-700 px-3 py-2 text-xs font-extrabold text-white disabled:opacity-50"
-                          >
-                            {isApplyingCorrections ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
-                            Potvrdit vybrané změny
-                          </button>
-                        )}
-                      </div>
-                      {(dataVerification.recommended_corrections || []).length ? (
-                        <div className="mt-3 grid gap-2 lg:grid-cols-2">
-                          {dataVerification.recommended_corrections.map((correction) => (
-                            <label key={correction.field} className="flex cursor-pointer gap-2 rounded-lg border border-sky-200 bg-white p-2.5 text-xs">
-                              <input
-                                type="checkbox"
-                                checked={selectedCorrectionFields.includes(correction.field)}
-                                onChange={() => setSelectedCorrectionFields((previous) =>
-                                  previous.includes(correction.field)
-                                    ? previous.filter((field) => field !== correction.field)
-                                    : [...previous, correction.field]
-                                )}
-                                className="mt-0.5 h-4 w-4 rounded border-slate-300 text-sky-700"
-                              />
-                              <span>
-                                <strong className="block text-slate-900">{correction.label || correction.field}</strong>
-                                <span className="mt-0.5 block text-slate-600">
-                                  {String(correction.current_value ?? 'prázdné')} → <strong>{String(correction.proposed_value ?? 'prázdné')}</strong>
-                                </span>
-                                {correction.reason && <span className="mt-1 block text-[10px] leading-4 text-slate-500">{correction.reason}</span>}
-                              </span>
-                            </label>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-2 text-xs font-bold text-emerald-700">Nebyly nalezeny žádné bezpečné návrhy změn.</p>
-                      )}
-                    </div>
-                  )}
                   <div className="overflow-x-auto px-4 pb-2 pt-2" aria-label="Seznam PDF dokumentů">
                     <div className="flex min-w-max gap-2">
                     {selectedCaseDocuments.map((document) => {
@@ -549,7 +523,7 @@ export default function IsirView({
                                 <span className="block text-[10px] font-extrabold leading-3 text-slate-500">{formatCompactDate(document.event_date)}</span>
                                 <strong className="mt-0.5 block line-clamp-2 text-[10px] font-black leading-[12px] text-[#79491f]" title={document.title}>{document.title}</strong>
                                 <span className="mt-0.5 block truncate text-[9px] font-bold leading-3 text-slate-500">
-                                  {isTruthy(document.is_main) ? 'hlavní dokument' : 'příloha'}
+                                  {isTruthy(document.is_main) ? 'hlavní dokument' : 'vedlejší dokument'}
                                   {isTruthy(document.is_new) ? ' · nové' : ''}
                                 </span>
                               </button>
@@ -613,7 +587,7 @@ export default function IsirView({
               </div>
 
               <div className="space-y-4">
-                <article className="rounded-3xl border border-white bg-white/[0.95] p-5 shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
+                <article className="rounded-xl border border-[#dfcdb8] bg-white/[0.97] p-4 shadow-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs font-bold uppercase tracking-wide text-violet-700">Kazuistika AI</p>
@@ -625,25 +599,29 @@ export default function IsirView({
                       </button>
                     )}
                   </div>
-                  {!selectedAnalysis && !selectedCase.ai_summary_json && !documentSummaries.length ? (
+                  {!caseStudySections.length && !documentSummaries.length ? (
                     <div className="mt-4 rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-6 text-center">
                       <Bot className="mx-auto h-7 w-7 text-violet-400" />
-                      <p className="mt-2 text-sm font-bold text-slate-800">Vyberte důležité dokumenty a vytvořte společnou analýzu.</p>
+                      <p className="mt-2 text-sm font-bold text-slate-800">Kazuistika zatím není vytvořená. Vytvoří se automaticky po načtení podstatných dokumentů.</p>
                     </div>
                   ) : (
                     <div className="mt-4 grid gap-3 lg:grid-cols-[190px_minmax(0,1fr)]">
                       <aside className="rounded-xl border border-amber-200 bg-[#f7ead8] p-2">
                         <nav className="space-y-2" aria-label="Části kazuistiky">
-                          <button type="button" onClick={() => setAnalysisTab('current')} className={`w-full rounded-lg border px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide transition ${
-                            analysisTab === 'current'
-                              ? 'border-amber-800 bg-[#875326] text-white shadow-sm'
-                              : 'border-amber-300 bg-white text-amber-950 hover:bg-amber-50'
-                          }`}>Aktuální stav a co řešit</button>
-                          <button type="button" onClick={() => setAnalysisTab('evolution')} className={`w-full rounded-lg border px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide transition ${
-                            analysisTab === 'evolution'
-                              ? 'border-amber-800 bg-[#875326] text-white shadow-sm'
-                              : 'border-amber-300 bg-white text-amber-950 hover:bg-amber-50'
-                          }`}>Vývoj řízení</button>
+                          {caseStudySections.map((section) => (
+                            <button
+                              key={section.key}
+                              type="button"
+                              onClick={() => setAnalysisTab(section.key)}
+                              className={`w-full rounded-lg border px-3 py-3 text-left text-[11px] font-extrabold uppercase tracking-wide transition ${
+                                activeCaseStudySection?.key === section.key
+                                  ? 'border-amber-800 bg-[#875326] text-white shadow-sm'
+                                  : 'border-amber-300 bg-white text-amber-950 hover:bg-amber-50'
+                              }`}
+                            >
+                              {section.title}
+                            </button>
+                          ))}
                         </nav>
                         <div className="mt-3 border-t border-amber-200 pt-3">
                           <p className="text-[9px] font-extrabold uppercase tracking-wide text-amber-900/60">Minimalizovaná shrnutí</p>
@@ -651,24 +629,19 @@ export default function IsirView({
                             <div className="mt-2 space-y-1.5">
                               {documentSummaries.map((summary) => (
                                 <button
-                                  key={summary.document_id}
+                                  key={summary.id}
                                   type="button"
-                                  onClick={() => setAnalysisTab(`document:${summary.document_id}`)}
-                                  className={`w-full rounded-lg border p-2 text-left transition ${
-                                    analysisTab === `document:${summary.document_id}`
-                                      ? 'border-sky-400 bg-sky-50'
-                                      : 'border-amber-200 bg-white hover:bg-amber-50'
-                                  }`}
+                                  onClick={() => {
+                                    setFloatingSummary(summary);
+                                    setFloatingSummaryTab('summary');
+                                    setIsFloatingSummaryMinimized(false);
+                                  }}
+                                  className="w-full rounded-lg border border-amber-200 bg-white p-2 text-left transition hover:bg-amber-50"
                                 >
                                   <strong className="block truncate text-[10px] text-slate-800">{summary.title}</strong>
                                   <span className="mt-1 block line-clamp-3 text-[9px] leading-3.5 text-slate-600">
                                     {summary.minimal_summary || summary.summary_text}
                                   </span>
-                                  {summary.specialized_reader === 'debt_relief_structured_report' && (
-                                    <span className="mt-1 inline-block rounded bg-violet-50 px-1.5 py-0.5 text-[8px] font-extrabold text-violet-700">
-                                      formulářově vytěženo
-                                    </span>
-                                  )}
                                 </button>
                               ))}
                             </div>
@@ -680,53 +653,14 @@ export default function IsirView({
 
                       <section className="rounded-xl border border-sky-200 bg-white p-4">
                         <h3 className="text-base font-black text-slate-950">
-                          {analysisTab === 'current'
-                            ? 'Aktuální stav a co řešit'
-                            : analysisTab === 'evolution'
-                              ? 'Vývoj řízení'
-                              : 'Shrnutí dokumentu'}
+                          {activeCaseStudySection?.title || 'Kazuistika'}
                         </h3>
-                        {analysisTab.startsWith('document:') ? (
-                          (() => {
-                            const documentId = analysisTab.slice('document:'.length);
-                            const summary = documentSummaries.find((item) => String(item.document_id) === documentId);
-                            return summary ? (
-                              <div className="mt-4">
-                                <p className="text-xs font-bold text-slate-500">{summary.title}</p>
-                                <div className="mt-3 whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-xs leading-5 text-slate-700 ring-1 ring-slate-200">
-                                  {summary.summary_text}
-                                </div>
-                              </div>
-                            ) : <p className="mt-4 text-sm text-slate-500">Shrnutí dokumentu už není k dispozici.</p>;
-                          })()
-                        ) : analysisTab === 'current' ? (
-                          <div className="mt-4 space-y-4">
-                            <div><h4 className="text-xs font-black text-slate-900">Stav nyní</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.status_now || 'Neuvedeno'}</p></div>
-                            <div><h4 className="text-xs font-black text-slate-900">Nejbližší termíny</h4><div className="mt-1.5"><AnalysisList items={analysisResult.nearest_deadlines} /></div></div>
-                            <div><h4 className="text-xs font-black text-slate-900">Co ověřit / řešit s klientem</h4><div className="mt-1.5"><AnalysisList items={analysisResult.advisor_actions} /></div></div>
-                            <div><h4 className="text-xs font-black text-slate-900">Co má udělat klient</h4><div className="mt-1.5"><AnalysisList items={analysisResult.client_actions} /></div></div>
-                            <div>
-                              <h4 className="text-xs font-black text-slate-900">Finance a pohledávky</h4>
-                              {analysisResult.finance_summary_lines?.length ? (
-                                <div className="mt-1.5"><AnalysisList items={analysisResult.finance_summary_lines} /></div>
-                              ) : (
-                                <dl className="mt-2 grid grid-cols-2 gap-2 rounded-xl bg-emerald-50/70 p-3 text-xs ring-1 ring-emerald-100">
-                                  <div><dt className="text-[10px] text-emerald-800">Pohledávky celkem</dt><dd className="font-black text-emerald-950">{formatMoney(finance.claims_total_amount || selectedCase.claims_total_amount)}</dd></div>
-                                  <div><dt className="text-[10px] text-emerald-800">Přezkoumáno</dt><dd className="font-black text-emerald-950">{finance.reviewed_claims_count ?? selectedCase.claims_count ?? '—'}</dd></div>
-                                  <div><dt className="text-[10px] text-emerald-800">Očekávání 3 roky</dt><dd className="font-black text-emerald-950">{finance.expected_satisfaction_3y_percent == null ? '—' : `${finance.expected_satisfaction_3y_percent} %`}</dd></div>
-                                  <div><dt className="text-[10px] text-emerald-800">Očekávání 5 let</dt><dd className="font-black text-emerald-950">{finance.expected_satisfaction_5y_percent == null ? '—' : `${finance.expected_satisfaction_5y_percent} %`}</dd></div>
-                                </dl>
-                              )}
-                            </div>
-                            {analysisResult.insolvency_evaluation && <div><h4 className="text-xs font-black text-slate-900">Vyhodnocení oddlužení</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.insolvency_evaluation}</p></div>}
-                            <div><h4 className="text-xs font-black text-slate-900">Nejistoty pro aktuální práci</h4><div className="mt-1.5"><AnalysisList items={analysisResult.uncertainties} empty="Žádné uvedené." /></div></div>
-                            <p className="border-t border-slate-100 pt-2 text-[11px] text-slate-500">Jistota výstupu: <strong>{analysisResult.confidence || 'neuvedena'}</strong></p>
+                        {activeCaseStudySection ? (
+                          <div className="mt-4 text-xs leading-5 text-slate-700">
+                            <RichAiText value={activeCaseStudySection.body} />
                           </div>
                         ) : (
-                          <div className="mt-4 space-y-4">
-                            {analysisResult.history_summary && <div><h4 className="text-xs font-black text-slate-900">Stručný vývoj</h4><p className="mt-1.5 whitespace-pre-wrap text-xs leading-5 text-slate-700">{analysisResult.history_summary}</p></div>}
-                            <div><h4 className="text-xs font-black text-slate-900">Časová osa</h4><div className="mt-1.5"><AnalysisList items={analysisResult.proceeding_evolution} /></div></div>
-                          </div>
+                          <p className="mt-4 text-sm text-slate-500">Kazuistika zatím není vytvořená.</p>
                         )}
                       </section>
                     </div>
@@ -735,6 +669,75 @@ export default function IsirView({
               </div>
             </div>
           </>
+        )}
+        {floatingSummary && !isFloatingSummaryMinimized && (
+          <aside
+            ref={floatingSummaryPanelRef}
+            style={floatingSummaryPosition
+              ? { left: floatingSummaryPosition.left, top: floatingSummaryPosition.top }
+              : undefined}
+            className={`fixed z-50 flex max-h-[78vh] w-[min(720px,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-amber-300 bg-white shadow-2xl ${
+              floatingSummaryPosition ? '' : 'bottom-5 right-5'
+            }`}
+          >
+            <div
+              onPointerDown={startFloatingSummaryDrag}
+              onPointerMove={moveFloatingSummary}
+              onPointerUp={stopFloatingSummaryDrag}
+              onPointerCancel={stopFloatingSummaryDrag}
+              className="flex cursor-move touch-none select-none items-start justify-between gap-4 border-b border-amber-200 bg-[#f7ead8] px-4 py-3"
+            >
+              <div className="min-w-0">
+                <strong className="block truncate text-sm text-slate-900">{floatingSummary.title}</strong>
+                <span className="mt-0.5 block text-[10px] text-slate-500">
+                  {floatingSummary.created_at ? `Vytvořeno: ${formatDate(floatingSummary.created_at, true)}` : ''}
+                </span>
+              </div>
+              <div className="flex shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsFloatingSummaryMinimized(true)}
+                  className="rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-[10px] font-bold text-amber-950"
+                >
+                  Minimalizovat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFloatingSummary(null)}
+                  className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600"
+                  aria-label="Zavřít shrnutí"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+            {floatingSummarySections.length > 1 && (
+              <nav className="flex flex-wrap gap-2 border-b border-slate-200 px-4 py-2" aria-label="Části shrnutí dokumentů">
+                {floatingSummarySections.map((section) => (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => setFloatingSummaryTab(section.key)}
+                    className={`rounded-lg px-3 py-1.5 text-[10px] font-extrabold ${
+                      activeFloatingSummarySection?.key === section.key
+                        ? 'bg-[#875326] text-white'
+                        : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {section.title}
+                  </button>
+                ))}
+              </nav>
+            )}
+            <div className="min-h-0 overflow-y-auto p-4">
+              <h3 className="text-sm font-black text-slate-950">
+                {activeFloatingSummarySection?.title || 'Shrnutí dokumentu'}
+              </h3>
+              <div className="mt-3 text-xs leading-5 text-slate-700">
+                <RichAiText value={activeFloatingSummarySection?.body || floatingSummary.summary_text} />
+              </div>
+            </div>
+          </aside>
         )}
       </section>
     );

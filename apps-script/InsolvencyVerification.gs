@@ -91,6 +91,10 @@ function saveInsolvencySnapshot_(snapshot, context) {
     const caseId = normalizeText_(caseItem.case_id);
     if (!caseId) return null;
     const existingCase = existingCasesById[caseId];
+    const normalizedClaimsDeadline = normalizeIsirDate_(caseItem.claims_deadline);
+    const claimCollectionRunning = Boolean(
+      normalizedClaimsDeadline && normalizedClaimsDeadline >= timestamp.slice(0, 10)
+    );
     return {
       case_id: caseId,
       project_id: context.projectId,
@@ -107,8 +111,10 @@ function saveInsolvencySnapshot_(snapshot, context) {
       secondary_document_count: Math.max(0, Number(caseItem.secondary_document_count) || 0),
       last_event_at: normalizeIsirDate_(caseItem.last_event_at),
       last_event_title: normalizeText_(caseItem.last_event_title),
-      claims_deadline: normalizeIsirDate_(caseItem.claims_deadline),
-      claims_count: Math.max(0, Number(caseItem.claims_count) || 0),
+      claims_deadline: normalizedClaimsDeadline,
+      claims_count: existingCase && !claimCollectionRunning
+        ? Math.max(0, Number(existingCase.claims_count) || 0)
+        : Math.max(0, Number(caseItem.claims_count) || 0),
       claims_total_amount: existingCase ? existingCase.claims_total_amount : '',
       ai_status: existingCase ? existingCase.ai_status : '',
       ai_model: existingCase ? existingCase.ai_model : '',
@@ -251,6 +257,17 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
       }))
     });
   }
+  if (resultJson.length > 45000 && Array.isArray(summary.structured_extractions)) {
+    resultJson = JSON.stringify({
+      structured_extractions: summary.structured_extractions.map((item) => ({
+        document_id: item.document_id,
+        title: item.title,
+        specialized_reader: item.specialized_reader,
+        confidence: item.confidence,
+        analyzed_at: item.analyzed_at
+      }))
+    });
+  }
   if (resultJson.length > 45000) {
     throw new Error('AI analýza je příliš rozsáhlá pro bezpečné uložení.');
   }
@@ -274,13 +291,10 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
   };
   upsertDataObject_(DATA_SHEETS.insolvencyAnalyses, 'analysis_id', analysisId, row);
 
-  const finance = summary.finances && typeof summary.finances === 'object' ? summary.finances : {};
   const isCaseStudy = row.kind === 'CASE_DOCUMENT_ANALYSIS'
     || row.kind === 'LEGACY_LOCAL_IMPORT';
   if (isCaseStudy) {
     updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
-      claims_count: Number(finance.reviewed_claims_count) || caseRow.claims_count || 0,
-      claims_total_amount: Number(finance.claims_total_amount) || caseRow.claims_total_amount || '',
       ai_status: 'OK',
       ai_model: row.model,
       ai_checked_at: timestamp,
@@ -290,19 +304,95 @@ function saveInsolvencyAnalysis_(analysisInput, context) {
       updated_at: timestamp,
       updated_by: context.actorId
     }));
+  } else if (row.kind === 'CLAIM_AMOUNT_EXTRACTION') {
+    const extractedTotal = Number(summary.claims_total_amount);
+    if (isFinite(extractedTotal)) {
+      updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
+        claims_total_amount: extractedTotal,
+        ai_model: row.model,
+        ai_checked_at: timestamp,
+        updated_at: timestamp,
+        updated_by: context.actorId
+      }));
+    }
+  } else if (row.kind === 'STRUCTURED_DOCUMENT_EXTRACTION') {
+    const parseStructuredNumber = function(value) {
+      if (value === null || value === '' || value === undefined) return NaN;
+      if (typeof value === 'number') return value;
+      let text = String(value).replace(/\u00a0/g, ' ').replace(/[^\d,.\s-]/g, '').trim();
+      if (!text) return NaN;
+      text = text.replace(/\s/g, '');
+      if (text.indexOf(',') >= 0 && text.indexOf('.') >= 0) {
+        text = text.replace(/\./g, '').replace(',', '.');
+      } else if (text.indexOf(',') >= 0) {
+        text = text.replace(',', '.');
+      } else if ((text.match(/\./g) || []).length > 1) {
+        text = text.replace(/\./g, '');
+      }
+      return Number(text);
+    };
+    const structuredExtractions = Array.isArray(summary.structured_extractions)
+      ? summary.structured_extractions
+      : [];
+    const trusted = structuredExtractions
+      .map((item) => item && item.structured_extraction)
+      .filter((payload) => payload && /^(high|medium)$/i.test(String(payload.confidence || '')));
+    let reviewedCount = null;
+    let reviewedTotal = null;
+    trusted.forEach((payload) => {
+      const claims = payload.claims_review && typeof payload.claims_review === 'object'
+        ? payload.claims_review
+        : {};
+      const countValue = claims.reviewed_claim_applications_count;
+      const totalWithoutValue = claims.reviewed_unsecured_claims_without_subordinated_total;
+      const totalWithValue = claims.reviewed_unsecured_claims_total;
+      const count = parseStructuredNumber(countValue);
+      const totalWithoutSubordinated = parseStructuredNumber(totalWithoutValue);
+      const totalWithSubordinated = parseStructuredNumber(totalWithValue);
+      if (isFinite(count)) reviewedCount = count;
+      if (isFinite(totalWithoutSubordinated)) reviewedTotal = totalWithoutSubordinated;
+      else if (isFinite(totalWithSubordinated)) reviewedTotal = totalWithSubordinated;
+    });
+    if (reviewedCount !== null || reviewedTotal !== null) {
+      updateDataObjectAtRow_(DATA_SHEETS.insolvencyCases, caseRow.__rowNumber, Object.assign({}, caseRow, {
+        claims_count: reviewedCount !== null ? reviewedCount : caseRow.claims_count,
+        claims_total_amount: reviewedTotal !== null ? reviewedTotal : caseRow.claims_total_amount,
+        ai_model: row.model,
+        ai_checked_at: timestamp,
+        updated_at: timestamp,
+        updated_by: context.actorId
+      }));
+    }
   }
 
   const documentSummaries = Array.isArray(summary.document_summaries)
     ? summary.document_summaries
     : [];
+  const structuredExtractions = Array.isArray(summary.structured_extractions)
+    ? summary.structured_extractions
+    : [];
+  const claimAmountExtractions = Array.isArray(summary.claim_amount_extractions)
+    ? summary.claim_amount_extractions
+    : [];
+  const documentAnalysisResults = documentSummaries
+    .concat(structuredExtractions)
+    .concat(claimAmountExtractions.map((item) => ({
+      document_id: item.document_id,
+      title: item.title,
+      specialized_reader: 'claim_amount',
+      claim_amount_extraction: item,
+      confidence: item.confidence,
+      model: row.model,
+      analyzed_at: timestamp
+    })));
   const caseDocumentsById = readDataObjects_(DATA_SHEETS.insolvencyDocuments)
     .filter((item) => item.case_id === caseId)
     .reduce((map, row) => {
       map[String(row.document_id || '')] = row;
       return map;
-    }, {});
+  }, {});
   const documentUpdatesById = {};
-  documentSummaries.forEach((documentSummary) => {
+  documentAnalysisResults.forEach((documentSummary) => {
     const documentId = normalizeText_(documentSummary.document_id);
     const documentRow = caseDocumentsById[documentId];
     if (!documentRow) return;

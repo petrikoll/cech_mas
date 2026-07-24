@@ -147,7 +147,20 @@ function stableId(value) {
   return createHash('sha256').update(String(value || '')).digest('hex').slice(0, 24);
 }
 
-function parsePdfLinksFromSegment(segment, caseId, seen, rowIsMain = true) {
+function parseTableCells(segment) {
+  return [...String(segment || '').matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)]
+    .map((match) => decodeHtml(match[1]));
+}
+
+function dateFromText(value) {
+  const dates = [...String(value || '').matchAll(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/g)];
+  const match = dates.length ? dates[dates.length - 1] : null;
+  return match
+    ? `${match[3]}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[1])).padStart(2, '0')}`
+    : '';
+}
+
+function parsePdfLinksFromSegment(segment, caseId, seen, rowMetadata = {}) {
   const text = String(segment || '');
   const linkPattern = /<a\b[^>]*href\s*=\s*["']([^"']*dokument\.PDF[^"']*)["'][^>]*>([\s\S]*?)<\/a>/gi;
   const documents = [];
@@ -157,22 +170,24 @@ function parsePdfLinksFromSegment(segment, caseId, seen, rowIsMain = true) {
     if (seen.has(sourceUrl)) continue;
     seen.add(sourceUrl);
     const nearbyText = decodeHtml(text.slice(Math.max(0, match.index - 420), match.index));
-    const dates = [...nearbyText.matchAll(/(\d{1,2})\.\s*(\d{1,2})\.\s*(\d{4})/g)];
-    const lastDate = dates.length ? dates[dates.length - 1] : null;
+    const isMainDocument = documents.length === 0;
+    const linkLabel = decodeHtml(match[2]);
+    const title = String(rowMetadata.title || '').trim()
+      || (!/^(pln[ýy]\s+text|otev[řr][ií]t|pdf)$/i.test(linkLabel) ? linkLabel : '')
+      || 'Dokument ISIR';
     documents.push({
       document_id: stableId(sourceUrl),
       case_id: caseId,
-      title: decodeHtml(match[2]) || 'Dokument ISIR',
-      document_type: 'PDF',
-      is_main: rowIsMain && documents.length === 0 ? 'Ano' : 'Ne',
+      title,
+      document_type: isMainDocument ? 'hlavní dokument' : 'vedlejší dokument',
+      is_main: isMainDocument ? 'Ano' : 'Ne',
+      is_main_case_event: rowMetadata.isMainCaseEvent === false ? 'Ne' : 'Ano',
       is_new: '',
       included_in_case_study: '',
       analysis_status: '',
       analysis_json: '',
       analysis_at: '',
-      event_date: lastDate
-        ? `${lastDate[3]}-${String(Number(lastDate[2])).padStart(2, '0')}-${String(Number(lastDate[1])).padStart(2, '0')}`
-        : '',
+      event_date: rowMetadata.eventDate || dateFromText(nearbyText),
       source_url: sourceUrl,
       drive_file_id: '',
       drive_url: '',
@@ -189,12 +204,20 @@ function parseDocumentsFromDetail(html, caseId) {
   const seen = new Set();
   const documents = [];
   if (rows.length) {
-    rows.forEach((row) => documents.push(...parsePdfLinksFromSegment(row, caseId, seen, true)));
+    rows.forEach((row) => {
+      const cells = parseTableCells(row);
+      if (cells.length < 4) return;
+      documents.push(...parsePdfLinksFromSegment(row, caseId, seen, {
+        title: cells[3],
+        eventDate: dateFromText(`${cells[1] || ''} ${cells[2] || ''}`),
+        isMainCaseEvent: !String(cells[0] || '').startsWith('P')
+      }));
+    });
   }
   if (!documents.length) {
-    documents.push(...parsePdfLinksFromSegment(text, caseId, seen, true));
+    documents.push(...parsePdfLinksFromSegment(text, caseId, seen));
   } else {
-    documents.push(...parsePdfLinksFromSegment(text, caseId, seen, false));
+    documents.push(...parsePdfLinksFromSegment(text, caseId, seen));
   }
   return documents;
 }
@@ -202,9 +225,16 @@ function parseDocumentsFromDetail(html, caseId) {
 function addMonths(dateValue, months) {
   const match = String(dateValue || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return '';
-  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
-  date.setUTCMonth(date.getUTCMonth() + months);
-  return date.toISOString().slice(0, 10);
+  const sourceYear = Number(match[1]);
+  const sourceMonth = Number(match[2]) - 1;
+  const sourceDay = Number(match[3]);
+  const targetMonthIndex = sourceMonth + Number(months || 0);
+  const targetYear = sourceYear + Math.floor(targetMonthIndex / 12);
+  const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+  const lastTargetDay = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(targetYear, targetMonth, Math.min(sourceDay, lastTargetDay)))
+    .toISOString()
+    .slice(0, 10);
 }
 
 async function loadCaseDocuments(caseItem, fetchImpl) {
@@ -266,12 +296,20 @@ async function checkClient(client, options = {}) {
     const caseDocuments = documents
       .filter((document) => document.case_id === item.case_id)
       .sort((left, right) => String(right.event_date || '').localeCompare(String(left.event_date || '')));
-    const latestDocument = caseDocuments[0] || null;
-    const insolvencyDecision = caseDocuments.find((document) =>
-      /usnesen[íi].*(úpadku|upadku)|(úpadku|upadku).*usnesen[íi]/i.test(document.title)
-    );
+    const latestDocument = caseDocuments.find((document) => document.is_main_case_event === 'Ano')
+      || caseDocuments[0]
+      || null;
+    const insolvencyDecisions = caseDocuments
+      .filter((document) => /usnesen[íi]\s+o\s+[úu]padku/i.test(document.title))
+      .sort((left, right) => {
+        const priority = (document) => /povolen[íi]\s+oddlu[žz]en[íi]/i.test(document.title) ? 0 : 1;
+        return priority(left) - priority(right)
+          || String(left.event_date || '').localeCompare(String(right.event_date || ''));
+      });
+    const insolvencyDecision = insolvencyDecisions[0];
     const claimDocuments = caseDocuments.filter((document) =>
       /přihl[aá]ška pohled[aá]vky/i.test(document.title)
+      && document.is_main === 'Ano'
     );
     return {
       ...item,
@@ -345,6 +383,7 @@ async function handleIsirRequest(request, response, options = {}) {
 
 export {
   ISIR_CUTOFF_DATE,
+  addMonths,
   buildSoapRequest,
   checkClient,
   handleIsirRequest,

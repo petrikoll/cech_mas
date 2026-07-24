@@ -238,21 +238,31 @@ test('ISIR imports a saved local archive without another Gemini call', () => {
   assert.match(appSource, /Datum narození nesouhlasí/);
 });
 
-test('ISIR AI používá frontu, samostatná shrnutí a potvrzované návrhy oprav', () => {
+test('ISIR AI používá frontu a původní oddělený tok shrnutí, formulářů a kazuistiky', () => {
   const isirSource = readFileSync(new URL('../src/app/IsirView.jsx', import.meta.url), 'utf8');
   const serverSource = readFileSync(new URL('../server.js', import.meta.url), 'utf8');
+  const analysisSource = readFileSync(new URL('../isirAnalysis.js', import.meta.url), 'utf8');
+  const automaticFlow = appSource.slice(
+    appSource.indexOf('const runAutomaticIsirAi'),
+    appSource.indexOf('const importLegacyIsirData')
+  );
 
   assert.match(serverSource, /\/api\/isir-ai-jobs/);
   assert.match(appSource, /job\.status === 'queued' \|\| job\.status === 'running'/);
-  assert.match(appSource, /mode: 'document-summary'/);
-  assert.match(appSource, /mode: 'data-verification'/);
+  assert.match(isirSource, /mode: 'document-summary'/);
+  assert.match(appSource, /mode: 'structured-extraction'/);
+  assert.match(appSource, /mode: 'claim-extraction'/);
   assert.match(appSource, /mode: 'case-study'/);
   assert.match(appSource, /updatedCaseStudies \+= await runAutomaticIsirAi\(snapshot, client\)/);
   assert.match(appSource, /context_documents: serializedContextDocuments/);
   assert.match(appSource, /included_in_case_study/);
-  assert.match(appSource, /priority\(right\) - priority\(left\)/);
+  assert.match(appSource, /ověřuji, zda běží lhůta pro podávání přihlášek/);
+  assert.match(analysisSource, /Načítám \$\{index \+ 1\}\/\$\{documents\.length\} dokumentu/);
+  assert.doesNotMatch(automaticFlow, /mode: 'document-summary'/);
+  assert.doesNotMatch(automaticFlow, /mode: 'data-verification'/);
   assert.match(isirSource, /Minimalizovaná shrnutí/);
-  assert.match(isirSource, /Zkontrolovat údaje/);
-  assert.match(isirSource, /Potvrdit vybrané změny/);
+  assert.match(isirSource, /Minimalizovat/);
+  assert.doesNotMatch(isirSource, /Zkontrolovat údaje/);
+  assert.doesNotMatch(isirSource, /Potvrdit vybrané změny/);
   assert.match(isirSource, /item\.kind === 'LEGACY_LOCAL_IMPORT'/);
 });
