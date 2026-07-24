@@ -346,18 +346,6 @@ function readLegacyIsirMigrationFile_(fileIdInput, context) {
   if (file.getName() !== expectedFileName) {
     throw new Error('Importní soubor nepatří aktivnímu projektu.');
   }
-  const parents = file.getParents();
-  let allowedParent = false;
-  while (parents.hasNext()) {
-    if (parents.next().getName() === 'ISIR-Kontrola – archiv lokální aplikace') {
-      allowedParent = true;
-      break;
-    }
-  }
-  if (!allowedParent) {
-    throw new Error('Importní soubor není uložen v povolené archivní složce.');
-  }
-
   let bundle;
   try {
     bundle = JSON.parse(file.getBlob().getDataAsString('UTF-8'));
