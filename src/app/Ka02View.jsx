@@ -42,6 +42,7 @@ function Ka02View({
   records,
   onSaveRecord,
   onUpdateRecord,
+  onDeleteRecord,
   ka02Draft,
   setKa02Draft,
   currentWorker,
@@ -51,7 +52,7 @@ function Ka02View({
   const [formError, setFormError] = React.useState('');
   const [isGeneratingAiNote, setIsGeneratingAiNote] = React.useState(false);
   const [aiReview, setAiReview] = React.useState(null);
-  const [clientOverviewView, setClientOverviewView] = React.useState('performances');
+  const [clientOverviewView, setClientOverviewView] = React.useState('payment-plans');
   const selectedClient = clients.find((client) => client.id === ka02Draft.selectedClientId) || null;
   const selectedPhase = KA1_PHASES.find((phase) => phase.code === ka02Draft.phaseCode) || KA1_PHASES[0];
   const durationMinutes = durationFromDraft(ka02Draft);
@@ -353,6 +354,7 @@ function Ka02View({
                 records={records}
                 onSaveRecord={onSaveRecord}
                 onUpdateRecord={onUpdateRecord}
+                onDeleteRecord={onDeleteRecord}
                 isSaving={isSaving}
               />
             ) : !selectedClient ? (

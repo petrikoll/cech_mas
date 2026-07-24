@@ -65,6 +65,10 @@ test('přehled klienta v KA1 přepíná výkony a splátkové kalendáře', () =
   assert.match(paymentCalendarsSource, /record\.entityType === 'payment_plan'/);
   assert.match(appSource, /fetchAction\('listPaymentPlans'\)/);
   assert.match(appSource, /action: 'savePaymentPlan'/);
+  assert.match(ka1PerformanceSource, /useState\('payment-plans'\)/);
+  assert.match(paymentCalendarsSource, /Smazat kalendář/);
+  assert.match(paymentCalendarsSource, /setTimeout\(\s*\(\) => persistQueuedStatuses\(record\),\s*650/);
+  assert.match(appSource, /action = 'deletePaymentPlan'/);
 });
 
 test('poslední výkony zobrazují význam, ne pouze kódy činností', () => {

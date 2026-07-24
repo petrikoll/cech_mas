@@ -54,7 +54,10 @@ function normalizeInstallmentStatuses_(value, schedule) {
 function listPaymentPlans_(projectId) {
   const normalizedProjectId = requireProjectId_(projectId);
   return readDataObjects_(DATA_SHEETS.paymentPlans)
-    .filter((row) => requireProjectId_(row.project_id) === normalizedProjectId)
+    .filter((row) =>
+      requireProjectId_(row.project_id) === normalizedProjectId &&
+      String(row.status || '').toUpperCase() !== 'DELETED'
+    )
     .map((row) => {
       const value = Object.assign({}, row);
       delete value.__rowNumber;
@@ -137,6 +140,35 @@ function savePaymentPlan_(input, context) {
     return value;
   } catch (error) {
     writeAudit_(context, 'SAVE', 'PAYMENT_PLAN', input && input.plan_id, 'ERROR', error.message);
+    throw error;
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function deletePaymentPlan_(planId, context) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+  try {
+    const existing = readDataObjects_(DATA_SHEETS.paymentPlans).find((row) =>
+      String(row.plan_id || '') === String(planId || '')
+    );
+    if (!existing) throw new Error('Splátkový kalendář nebyl nalezen.');
+    if (requireProjectId_(existing.project_id) !== context.projectId) {
+      throw new Error('Splátkový kalendář patří do jiného projektu.');
+    }
+
+    const updated = Object.assign({}, existing, {
+      status: 'DELETED',
+      updated_at: nowIso_(),
+      updated_by: context.actorId
+    });
+    delete updated.__rowNumber;
+    updateDataObjectAtRow_(DATA_SHEETS.paymentPlans, existing.__rowNumber, updated);
+    writeAudit_(context, 'DELETE', 'PAYMENT_PLAN', existing.plan_id, 'OK', '');
+    return { plan_id: existing.plan_id, status: 'DELETED' };
+  } catch (error) {
+    writeAudit_(context, 'DELETE', 'PAYMENT_PLAN', planId, 'ERROR', error.message);
     throw error;
   } finally {
     lock.releaseLock();

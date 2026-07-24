@@ -84,6 +84,12 @@ function doPost(e) {
         paymentPlan: savePaymentPlan_(payload.paymentPlan || {}, context)
       });
     }
+    if (action === 'deletePaymentPlan') {
+      return jsonResponse_({
+        ok: true,
+        paymentPlan: deletePaymentPlan_(payload.id, context)
+      });
+    }
     if (action === 'deletePerformance') {
       return jsonResponse_({
         ok: true,

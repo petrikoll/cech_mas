@@ -4131,6 +4131,8 @@ function App() {
       action = 'deleteEducation';
     } else if (record.entityType === 'supervision_records') {
       action = 'deleteSupervision';
+    } else if (record.entityType === 'payment_plan') {
+      action = 'deletePaymentPlan';
     }
     if (action) {
       await postGoogleSheetAction({ action, id: record.id });
@@ -4153,7 +4155,7 @@ function App() {
     try {
       await deleteGoogleSheetRecord(record);
       setRecords(nextRecords);
-      if (!hasFirebaseConfig || !db) {
+      if (!hasFirebaseConfig || !db || record.entityType === 'payment_plan') {
         saveLocalRecords(nextRecords);
         setFlash('Záznam byl smazán.');
         return;
@@ -7378,6 +7380,7 @@ ${rawPlanOutput}` }] }],
               records={records}
               onSaveRecord={saveRecord}
               onUpdateRecord={updateExistingRecord}
+              onDeleteRecord={deleteRecord}
               ka02Draft={ka02Draft}
               setKa02Draft={setKa02Draft}
               setGeneratorDraft={setGeneratorDraft}

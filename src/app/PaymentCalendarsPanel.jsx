@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  CalendarCheck2, Check, ChevronDown, ChevronUp, CircleDashed, Plus, WalletCards, X
+  CalendarCheck2, Check, ChevronDown, ChevronUp, CircleDashed, Plus, Trash2, WalletCards, X
 } from 'lucide-react';
 import {
   PAYMENT_MONTH_STATUSES,
@@ -68,12 +68,16 @@ export default function PaymentCalendarsPanel({
   records,
   onSaveRecord,
   onUpdateRecord,
+  onDeleteRecord,
   isSaving
 }) {
   const [isAdding, setIsAdding] = React.useState(false);
   const [expandedPlanIds, setExpandedPlanIds] = React.useState({});
+  const [optimisticStatuses, setOptimisticStatuses] = React.useState({});
   const [draft, setDraft] = React.useState(EMPTY_DRAFT);
   const [message, setMessage] = React.useState('');
+  const pendingStatusesRef = React.useRef({});
+  const saveTimersRef = React.useRef({});
 
   React.useEffect(() => {
     setIsAdding(false);
@@ -163,32 +167,88 @@ export default function PaymentCalendarsPanel({
       }
     );
     if (ok) setMessage(successMessage);
+    return ok;
   };
 
-  const toggleMonth = async (record, month) => {
+  const persistQueuedStatuses = async (record) => {
+    const nextStatuses = pendingStatusesRef.current[record.id];
+    if (!nextStatuses) return;
+    delete pendingStatusesRef.current[record.id];
+    delete saveTimersRef.current[record.id];
+
+    const ok = await updatePlanPayload(
+      record,
+      { ...(record.payload || {}), installmentStatuses: nextStatuses },
+      'Změny v harmonogramu byly uloženy.'
+    );
+    setOptimisticStatuses((previous) => {
+      const next = { ...previous };
+      delete next[record.id];
+      return next;
+    });
+    if (!ok) setMessage('Změny se nepodařilo uložit. Harmonogram byl obnoven.');
+  };
+
+  const toggleMonth = (record, month) => {
     const payload = record.payload || {};
-    const currentStatuses = payload.installmentStatuses || {};
+    const currentStatuses =
+      pendingStatusesRef.current[record.id] ||
+      optimisticStatuses[record.id] ||
+      payload.installmentStatuses ||
+      {};
     const nextStatus = nextPaymentMonthStatus(currentStatuses[month]);
     const nextStatuses = { ...currentStatuses };
     if (nextStatus === PAYMENT_MONTH_STATUSES.PENDING) delete nextStatuses[month];
     else nextStatuses[month] = nextStatus;
-    await updatePlanPayload(
-      record,
-      { ...payload, installmentStatuses: nextStatuses },
-      `Stav splátky ${formatMonth(month)} byl uložen.`
+
+    pendingStatusesRef.current[record.id] = nextStatuses;
+    setOptimisticStatuses((previous) => ({ ...previous, [record.id]: nextStatuses }));
+    setMessage('Změny budou automaticky uloženy…');
+    if (saveTimersRef.current[record.id]) clearTimeout(saveTimersRef.current[record.id]);
+    saveTimersRef.current[record.id] = setTimeout(
+      () => persistQueuedStatuses(record),
+      650
     );
   };
 
+  const deletePlan = async (record) => {
+    if (saveTimersRef.current[record.id]) clearTimeout(saveTimersRef.current[record.id]);
+    delete saveTimersRef.current[record.id];
+    delete pendingStatusesRef.current[record.id];
+    setOptimisticStatuses((previous) => {
+      const next = { ...previous };
+      delete next[record.id];
+      return next;
+    });
+    await onDeleteRecord(record);
+  };
+
   const setPlanStatus = async (record, status) => {
-    await updatePlanPayload(
+    const pendingStatuses = pendingStatusesRef.current[record.id];
+    if (saveTimersRef.current[record.id]) clearTimeout(saveTimersRef.current[record.id]);
+    delete saveTimersRef.current[record.id];
+    delete pendingStatusesRef.current[record.id];
+    const ok = await updatePlanPayload(
       record,
-      { ...(record.payload || {}), status },
+      {
+        ...(record.payload || {}),
+        ...(pendingStatuses ? { installmentStatuses: pendingStatuses } : {}),
+        status
+      },
       status === PAYMENT_PLAN_STATUSES.COMPLETED
         ? 'Kalendář byl označen jako úspěšně dokončený.'
         : status === PAYMENT_PLAN_STATUSES.FAILED
           ? 'Kalendář byl označen jako nedokončený.'
           : 'Kalendář byl znovu aktivován.'
     );
+    if (pendingStatuses) {
+      setOptimisticStatuses((previous) => {
+        const next = { ...previous };
+        delete next[record.id];
+        return next;
+      });
+    }
+    if (!ok) setMessage('Změnu stavu se nepodařilo uložit.');
   };
 
   if (!selectedClient) {
@@ -326,7 +386,7 @@ export default function PaymentCalendarsPanel({
       {plans.map((record) => {
         const payload = record.payload || {};
         const months = buildPaymentSchedule(payload.firstPaymentMonth, payload.plannedInstallments);
-        const statuses = payload.installmentStatuses || {};
+        const statuses = optimisticStatuses[record.id] || payload.installmentStatuses || {};
         const paidCount = months.filter((month) => statuses[month] === PAYMENT_MONTH_STATUSES.PAID).length;
         const missedCount = months.filter((month) => statuses[month] === PAYMENT_MONTH_STATUSES.MISSED).length;
         const isExpanded = expandedPlanIds[record.id] !== false;
@@ -442,6 +502,15 @@ export default function PaymentCalendarsPanel({
                       Znovu aktivovat
                     </button>
                   )}
+                  <button
+                    type="button"
+                    disabled={isSaving}
+                    onClick={() => deletePlan(record)}
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2.5 py-2 text-[11px] font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    Smazat kalendář
+                  </button>
                 </div>
               </div>
             )}

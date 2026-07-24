@@ -285,6 +285,14 @@ test('backend splátkových kalendářů normalizuje měsíce a sestaví harmono
   assert.throws(() => backend.buildPaymentSchedule_('04/26', 0), /od 1 do 240/);
 });
 
+test('splátkový kalendář lze bezpečně skrýt s auditní stopou', () => {
+  assert.match(source, /action === 'deletePaymentPlan'/);
+  assert.match(source, /function deletePaymentPlan_/);
+  assert.match(source, /status: 'DELETED'/);
+  assert.match(source, /String\(row\.status \|\| ''\)\.toUpperCase\(\) !== 'DELETED'/);
+  assert.match(source, /writeAudit_\(context, 'DELETE', 'PAYMENT_PLAN'/);
+});
+
 test('zakládání složky kopíruje kompletní sadu a používá projektové šablony', () => {
   assert.match(source, /'Monitorovaci_list\.xlsm'/);
   assert.match(source, /'SMLOUVA\.docx'/);
