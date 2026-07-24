@@ -175,6 +175,13 @@ const AI_TOOL_LINKS = Object.freeze([
     url: 'https://kalkulacka1-3.onrender.com/',
     icon: PieChart,
     tone: 'from-amber-50 to-white text-amber-700 border-amber-100'
+  },
+  {
+    title: 'Mapování',
+    description: 'Otevře samostatnou aplikaci pro mapování.',
+    url: 'https://mapovani.onrender.com/',
+    icon: MapPin,
+    tone: 'from-cyan-50 to-white text-cyan-700 border-cyan-100'
   }
 ]);
 

@@ -140,12 +140,13 @@ test('dashboard spouští hromadnou kontrolu klientů v ISIR', () => {
   assert.match(appSource, /isVerifyingProjectInsolvencies/);
 });
 
-test('hlavní navigace obsahuje přehled AI pomůcek se čtyřmi externími odkazy', () => {
+test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy', () => {
   assert.match(configSource, /AI Pom\\u016fcky/);
   assert.match(appSource, /mainView === 'ai-tools'/);
   assert.match(appSource, /https:\/\/chranenebydleni\.onrender\.com\//);
   assert.match(appSource, /https:\/\/dokument-creator\.onrender\.com\//);
   assert.match(appSource, /https:\/\/portal-040d\.onrender\.com\/elai-payslips\.html/);
   assert.match(appSource, /https:\/\/kalkulacka1-3\.onrender\.com\//);
+  assert.match(appSource, /https:\/\/mapovani\.onrender\.com\//);
   assert.match(appSource, /target="_blank"/);
 });
