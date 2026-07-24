@@ -28,11 +28,17 @@ import {
 } from '../lib/legacyIsirCaseStudy.js';
 
 const formatDate = (value, withTime = false) => {
-  const text = String(value || '');
-  const match = text.match(/^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2}))?/);
-  if (!match) return '—';
-  const date = `${Number(match[3])}. ${Number(match[2])}. ${match[1]}`;
-  return withTime && match[4] ? `${date} ${match[4]}:${match[5]}` : date;
+  const text = String(value || '').trim();
+  const isoMatch = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:T(\d{2}):(\d{2}))?/);
+  if (isoMatch) {
+    const date = `${Number(isoMatch[3])}. ${Number(isoMatch[2])}. ${isoMatch[1]}`;
+    return withTime && isoMatch[4] ? `${date} ${isoMatch[4]}:${isoMatch[5]}` : date;
+  }
+  const czechMatch = text.match(/^(\d{1,2})[./]\s*(\d{1,2})[./]\s*(\d{4})/);
+  if (czechMatch) {
+    return `${Number(czechMatch[1])}. ${Number(czechMatch[2])}. ${czechMatch[3]}`;
+  }
+  return '—';
 };
 
 const formatCompactDate = (value) => {

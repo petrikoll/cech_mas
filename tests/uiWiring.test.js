@@ -236,6 +236,7 @@ test('ISIR zachovává původní práci s PDF bez ručního importu klientů v r
   assert.match(isirViewSource, /if \(!statusFilters\.length\) return row\.clientCases\.length > 0/);
   assert.match(isirViewSource, />Datum narození</);
   assert.match(isirViewSource, /formatDate\(row\.client\.datumNarozeni\)/);
+  assert.match(isirViewSource, /const czechMatch = text\.match/);
   assert.match(isirViewSource, /Klienti se přebírají automaticky z registru aktivního projektu/);
   assert.match(isirViewSource, /border-2 border-slate-500/);
   assert.match(isirViewSource, /bg-slate-700/);
