@@ -257,6 +257,9 @@ ${JSON.stringify({
 První věta části „Stav nyní“ musí sdělit výsledek
 claims_deadline_verification_first_step. Tento systémový výsledek má přednost
 před starší kazuistikou i textem PDF.
+Je zakázáno uvést, že lhůta není bezpečně ověřena, pokud má
+claims_deadline_verification_first_step stav active, ends_today nebo expired.
+Stejný rozpor nesmí být ani v části „Nejistoty pro aktuální práci“.
 
 PRACOVNÍ ODBORNÝ ROZBOR:
 ${JSON.stringify(workingAnalysis, null, 2)}`;

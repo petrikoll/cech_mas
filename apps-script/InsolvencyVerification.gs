@@ -92,9 +92,6 @@ function saveInsolvencySnapshot_(snapshot, context) {
     if (!caseId) return null;
     const existingCase = existingCasesById[caseId];
     const normalizedClaimsDeadline = normalizeIsirDate_(caseItem.claims_deadline);
-    const claimCollectionRunning = Boolean(
-      normalizedClaimsDeadline && normalizedClaimsDeadline >= timestamp.slice(0, 10)
-    );
     return {
       case_id: caseId,
       project_id: context.projectId,
@@ -112,9 +109,11 @@ function saveInsolvencySnapshot_(snapshot, context) {
       last_event_at: normalizeIsirDate_(caseItem.last_event_at),
       last_event_title: normalizeText_(caseItem.last_event_title),
       claims_deadline: normalizedClaimsDeadline,
-      claims_count: existingCase && !claimCollectionRunning
-        ? Math.max(0, Number(existingCase.claims_count) || 0)
-        : Math.max(0, Number(caseItem.claims_count) || 0),
+      claims_count: Math.max(
+        0,
+        Number(existingCase && existingCase.claims_count) || 0,
+        Number(caseItem.claims_count) || 0
+      ),
       claims_total_amount: existingCase ? existingCase.claims_total_amount : '',
       ai_status: existingCase ? existingCase.ai_status : '',
       ai_model: existingCase ? existingCase.ai_model : '',

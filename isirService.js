@@ -307,10 +307,14 @@ async function checkClient(client, options = {}) {
           || String(left.event_date || '').localeCompare(String(right.event_date || ''));
       });
     const insolvencyDecision = insolvencyDecisions[0];
-    const claimDocuments = caseDocuments.filter((document) =>
-      /přihl[aá]ška pohled[aá]vky/i.test(document.title)
-      && document.is_main === 'Ano'
-    );
+    const claimDocuments = caseDocuments.filter((document) => {
+      const normalizedTitle = String(document.title || '')
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+      return /prihlaska.*pohledavky/.test(normalizedTitle)
+        && document.is_main === 'Ano';
+    });
     return {
       ...item,
       client_id: normalized.id,

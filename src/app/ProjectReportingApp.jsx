@@ -4937,7 +4937,13 @@ function App() {
         .sort((left, right) => String(left.event_date || '').localeCompare(String(right.event_date || '')));
       const hasCaseStudy = Boolean(String(caseItem.ai_case_study || '').trim());
       const newRelevantDocuments = newDocuments.filter(isCaseStudyRelevantDocument);
-      if (hasCaseStudy && !newRelevantDocuments.length) continue;
+      const deadlineWasLeftUnverified = Boolean(
+        workingCase.claims_deadline
+        && /lhůt[a-zá-ž\s]*přihl[a-zá-ž\s]*není\s+bezpečně\s+ověř/iu.test(
+          String(caseItem.ai_case_study || '')
+        )
+      );
+      if (hasCaseStudy && !newRelevantDocuments.length && !deadlineWasLeftUnverified) continue;
       if (!allCaseDocuments.length) continue;
 
       try {

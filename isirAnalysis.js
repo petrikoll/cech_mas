@@ -1,7 +1,8 @@
 import {
   buildCaseStudyAnalysisPrompt,
   buildCaseStudyFinalPrompt,
-  buildCaseStudyShorteningPrompt
+  buildCaseStudyShorteningPrompt,
+  getClaimsDeadlineStatus
 } from './isirPrompts.js';
 import {
   CLAIM_AMOUNT_EXTRACTION_PROMPT,
@@ -118,6 +119,33 @@ function parseLocalizedNumber(value) {
     text = text.replace(/\./g, '');
   }
   return Number(text);
+}
+
+function enforceClaimsDeadlineInCaseStudy(caseStudy, caseItem, currentDate) {
+  const status = getClaimsDeadlineStatus(caseItem?.claims_deadline, currentDate);
+  const statement = String(status.statement || '').trim();
+  if (!statement) return String(caseStudy || '').trim();
+
+  let text = String(caseStudy || '').trim();
+  text = text
+    .replace(
+      /Lhůta pro podáv[aá]ní přihlášek pohledávek[^.\n]*(?:\.)?/giu,
+      ''
+    )
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n');
+
+  const stateLabel = /Stav nyní:\s*/i;
+  if (stateLabel.test(text)) {
+    return text.replace(stateLabel, (match) => `${match}${statement}\n`);
+  }
+
+  const currentSection = /(\[\[SECTION:current:[^\]]+\]\]\s*)/i;
+  if (currentSection.test(text)) {
+    return text.replace(currentSection, `$1Stav nyní:\n${statement}\n\n`);
+  }
+
+  return `[[SECTION:current:Aktuální stav a co řešit]]\nStav nyní:\n${statement}\n\n${text}`;
 }
 
 function geminiRetryDelayMs(payload, headers, fallbackMs = 1500) {
@@ -598,6 +626,7 @@ async function analyzeIsirDocuments(input, options = {}) {
         signal: controller.signal
       });
     }
+    caseStudy = enforceClaimsDeadlineInCaseStudy(caseStudy, input.case, currentDate);
     return baseAnalysis(input, documents, 'CASE_DOCUMENT_ANALYSIS', {
       working_case_analysis: workingAnalysis.working_case_analysis || workingAnalysis,
       case_study: caseStudy
@@ -634,6 +663,7 @@ export {
   currentDateInPrague,
   geminiRetryDelayMs,
   handleIsirAnalysisRequest,
+  enforceClaimsDeadlineInCaseStudy,
   minimizeSummary,
   normalizeIsirPdfUrl,
   normalizedCorrections,

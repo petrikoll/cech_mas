@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   analyzeIsirDocuments,
   currentDateInPrague,
+  enforceClaimsDeadlineInCaseStudy,
   geminiRetryDelayMs,
   minimizeSummary,
   normalizeIsirPdfUrl,
@@ -207,4 +208,32 @@ test('kazuistika nejprve systémově ověří, zda běží lhůta přihlášek',
   assert.match(prompt, /debt_relief_structured_report/);
   assert.match(prompt, /Kompletní seznam dokumentů podle ISIR/);
   assert.match(prompt, /OBSAHOVĚ PŘILOŽENÉ PDF DOKUMENTY/);
+});
+
+test('finální kazuistika nesmí popřít systémově ověřenou lhůtu', () => {
+  const caseStudy = [
+    '[[SECTION:current:Aktuální stav a co řešit]]',
+    'Stav nyní:',
+    'Lhůta pro podávání přihlášek pohledávek není bezpečně ověřena.',
+    'Řízení pokračuje.',
+    '',
+    'Nejistoty pro aktuální práci:',
+    '- Lhůta pro podávání přihlášek pohledávek není bezpečně ověřena.',
+    '',
+    '[[SECTION:history:Vývoj řízení]]',
+    'Historie případu.'
+  ].join('\n');
+
+  const result = enforceClaimsDeadlineInCaseStudy(
+    caseStudy,
+    { claims_deadline: '2026-06-08' },
+    '2026-07-24'
+  );
+
+  assert.match(result, /Lhůta pro podávání přihlášek pohledávek skončila 2026-06-08\./);
+  assert.doesNotMatch(result, /není bezpečně ověřena/i);
+  assert.equal(
+    (result.match(/Lhůta pro podávání přihlášek pohledávek/gi) || []).length,
+    1
+  );
 });
