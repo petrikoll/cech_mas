@@ -214,12 +214,17 @@ test('hlavní navigace obsahuje přehled AI pomůcek s pěti externími odkazy',
   assert.match(appSource, /target="_blank"/);
 });
 
-test('ISIR imports a saved local archive without another Gemini call', () => {
+test('ISIR zachovává původní práci s PDF bez ručního importu klientů v rozhraní', () => {
   const isirViewSource = readFileSync(
     new URL('../src/app/IsirView.jsx', import.meta.url),
     'utf8'
   );
-  assert.match(isirViewSource, /Načíst připravená data z Disku/);
+  assert.doesNotMatch(isirViewSource, /Načíst připravená data z Disku/);
+  assert.doesNotMatch(isirViewSource, /Vybrat jiný soubor/);
+  assert.doesNotMatch(isirViewSource, /type="file"/);
+  assert.match(isirViewSource, /Klienti se přebírají automaticky z registru aktivního projektu/);
+  assert.match(isirViewSource, /border-2 border-slate-500/);
+  assert.match(isirViewSource, /bg-slate-700/);
   assert.match(isirViewSource, /Sbalit náhled/);
   assert.match(isirViewSource, /<iframe/);
   assert.match(isirViewSource, /const previewDocument =/);

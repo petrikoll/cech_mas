@@ -22,7 +22,6 @@ import {
   Search,
   ShieldAlert,
   Users,
-  UploadCloud,
   X
 } from 'lucide-react';
 import {
@@ -165,7 +164,6 @@ export default function IsirView({
   analyses = [],
   isChecking,
   isAnalyzing,
-  isImporting,
   progressNotice,
   onCheckClient,
   onCheckProject,
@@ -173,8 +171,6 @@ export default function IsirView({
   onAnalyzeDocuments,
   onMarkDocumentsSeen,
   onExportCaseStudy,
-  onImportLegacyData,
-  onImportLegacyFromDrive,
   onEditClient
 }) {
   const [query, setQuery] = useState('');
@@ -192,7 +188,6 @@ export default function IsirView({
   const [floatingSummaryTab, setFloatingSummaryTab] = useState('summary');
   const [isFloatingSummaryMinimized, setIsFloatingSummaryMinimized] = useState(false);
   const [floatingSummaryPosition, setFloatingSummaryPosition] = useState(null);
-  const importInputRef = useRef(null);
   const floatingSummaryPanelRef = useRef(null);
   const floatingSummaryDragRef = useRef(null);
 
@@ -402,14 +397,6 @@ export default function IsirView({
     }
   };
 
-  const importLegacyBundle = async (event) => {
-    const file = event.target.files?.[0];
-    event.target.value = '';
-    if (!file) return;
-    const bundle = JSON.parse(await file.text());
-    await onImportLegacyData(bundle);
-  };
-
   if (view === 'detail' && selectedRow) {
     const finance = analysisResult.finances || {};
     const caseNewDocuments = selectedCaseDocuments.filter((item) => isTruthy(item.is_new));
@@ -417,20 +404,20 @@ export default function IsirView({
     const previewDocumentUrl = getPdfPreviewUrl(previewDocument);
     return (
       <section className="space-y-3">
-        <article className="rounded-2xl border border-amber-900/15 bg-white/[0.96] p-3 shadow-[0_14px_34px_-28px_rgba(15,23,42,0.45)]">
+        <article className="rounded-xl border border-[#9a6b3e] bg-[#bd8753] p-3 text-slate-950 shadow-[0_12px_30px_-26px_rgba(71,42,18,0.8)]">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-start gap-3">
-              <button type="button" onClick={() => setView('list')} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50" aria-label="Zpět na přehled">
+              <button type="button" onClick={() => setView('list')} className="rounded-lg border border-amber-950/20 bg-white/80 p-2 text-slate-700 hover:bg-white" aria-label="Zpět na přehled">
                 <ArrowLeft className="h-4 w-4" />
               </button>
               <div>
-                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-sky-700">Detail klienta ISIR · ID {selectedRow.client.clientNumber}</p>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-amber-950/65">Detail klienta ISIR · ID {selectedRow.client.clientNumber}</p>
                 <h2 className="mt-0.5 text-xl font-black text-slate-950">{selectedRow.client.fullName}</h2>
-                <p className="text-xs text-slate-500">Datum narození {formatDate(selectedRow.client.datumNarozeni)} · projekt {selectedRow.client.projectId}</p>
+                <p className="text-xs text-amber-950/70">Datum narození {formatDate(selectedRow.client.datumNarozeni)} · projekt {selectedRow.client.projectId}</p>
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => onEditClient(selectedRow.client)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50">
+              <button type="button" onClick={() => onEditClient(selectedRow.client)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-950/20 bg-white/85 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-white">
                 <Pencil className="h-4 w-4" /> Upravit klienta
               </button>
               <button type="button" onClick={() => onCheckClient(selectedRow.client)} disabled={isChecking} className="inline-flex items-center gap-1.5 rounded-lg bg-rose-700 px-3 py-2 text-xs font-extrabold text-white hover:bg-rose-800 disabled:opacity-60">
@@ -438,10 +425,7 @@ export default function IsirView({
               </button>
             </div>
           </div>
-        </article>
-
-        <article className="rounded-xl border border-[#9a6b3e] bg-[#bd8753] p-3 text-slate-950 shadow-[0_12px_30px_-26px_rgba(71,42,18,0.8)]">
-          <div className="grid gap-x-5 gap-y-2 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-3 grid gap-x-5 gap-y-2 border-t border-amber-950/20 pt-3 sm:grid-cols-2 lg:grid-cols-4">
             {[
               ['Stav řízení', selectedCase ? normalizedStatus(selectedCase.case_status) : 'BEZ ŘÍZENÍ'],
               ['Spisová značka', selectedCase?.case_number || '—'],
@@ -474,25 +458,24 @@ export default function IsirView({
               ))}
             </div>
           )}
+          <div className="mt-3 flex flex-col gap-2 border-t border-amber-950/20 pt-3 text-[11px] sm:flex-row sm:items-center sm:justify-between">
+            <span className="inline-flex items-center gap-2 font-bold text-emerald-950">
+              <span className={`h-2 w-2 rounded-full ${isChecking || isAnalyzing ? 'animate-pulse bg-sky-600' : 'bg-emerald-700'}`} />
+              {isAnalyzing ? 'AI právě zpracovává dokumenty' : 'Bez běžící AI úlohy'}
+            </span>
+            <span className="text-amber-950/75">
+              <strong>Kazuistika:</strong> {selectedAnalysis ? formatDate(selectedAnalysis.created_at, true) : 'zatím nevytvořena'}
+            </span>
+          </div>
+          <div role="status" aria-live="polite" className="mt-2 rounded-lg border border-amber-950/15 bg-white/55 px-3 py-2 text-xs leading-5 text-slate-800">
+            <span className="inline-flex items-start gap-2">
+              {isChecking || isAnalyzing
+                ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
+                : <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />}
+              <span>{progressNotice || 'Kontrola nyní neběží.'}</span>
+            </span>
+          </div>
         </article>
-
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-emerald-200 bg-white/[0.94] px-3 py-2 text-[11px] shadow-sm">
-          <span className="inline-flex items-center gap-2 font-bold text-emerald-800">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            {isAnalyzing ? 'AI právě zpracovává dokumenty' : 'Bez běžící AI úlohy'}
-          </span>
-          <span className="text-slate-500">
-            <strong className="text-slate-700">Kazuistika:</strong> {selectedAnalysis ? formatDate(selectedAnalysis.created_at, true) : 'zatím nevytvořena'}
-          </span>
-        </div>
-        <div role="status" aria-live="polite" className="rounded-xl border border-sky-100 bg-sky-50/90 px-3 py-2 text-xs leading-5 text-sky-950 shadow-sm">
-          <span className="inline-flex items-start gap-2">
-            {isChecking || isAnalyzing
-              ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" />
-              : <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />}
-            <span>{progressNotice || 'Kontrola nyní neběží.'}</span>
-          </span>
-        </div>
 
         {!selectedCase ? (
           <div className="rounded-3xl border border-white bg-white/90 p-12 text-center ring-1 ring-slate-900/[0.05]">
@@ -768,60 +751,49 @@ export default function IsirView({
   }
 
   return (
-    <section className="space-y-4">
-      <div className="rounded-3xl border border-white bg-white/[0.94] p-6 shadow-[0_22px_60px_-46px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/[0.05]">
-        <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl bg-sky-50 p-3 text-sky-700 ring-1 ring-sky-100"><Scale className="h-6 w-6" /></div>
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.18em] text-sky-700">Kontrola a práce s dokumenty</p>
-              <h2 className="mt-1 text-2xl font-black tracking-tight text-slate-950">Klienti ISIR</h2>
-              <p className="mt-1 max-w-2xl text-sm leading-6 text-slate-600">Přehled řízení, nových dokumentů, lhůt a AI analýz pro klienty právě zvoleného projektu.</p>
-            </div>
+    <section className="space-y-3">
+      <div className="rounded-xl border-2 border-slate-400 bg-white/[0.96] p-4 shadow-[0_3px_12px_rgba(15,23,42,0.12)]">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-2xl font-black tracking-tight text-slate-950">Klienti ISIR</h2>
+            <p className="mt-0.5 text-xs text-slate-500">Klienti se přebírají automaticky z registru aktivního projektu.</p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <input ref={importInputRef} type="file" accept="application/json,.json" onChange={importLegacyBundle} className="sr-only" />
-            <button type="button" onClick={onImportLegacyFromDrive} disabled={isImporting || isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-700 px-4 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60">
-              {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <DownloadCloud className="h-4 w-4" />} Načíst připravená data z Disku
-            </button>
-            <button type="button" onClick={() => importInputRef.current?.click()} disabled={isImporting || isChecking} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-xs font-extrabold text-emerald-800 hover:bg-emerald-100 disabled:opacity-60">
-              <UploadCloud className="h-4 w-4" /> Vybrat jiný soubor
-            </button>
-            <button type="button" onClick={onCheckProject} disabled={isChecking || isImporting} className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-sky-700 px-5 py-3 text-sm font-extrabold text-white shadow-sm hover:bg-sky-800 disabled:opacity-60">
-              {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Hromadná kontrola ISIR
-            </button>
-          </div>
+          <button type="button" onClick={onCheckProject} disabled={isChecking} className="inline-flex min-h-10 items-center justify-center gap-2 rounded-lg bg-emerald-700 px-4 py-2 text-sm font-extrabold text-white shadow-sm hover:bg-emerald-800 disabled:opacity-60">
+            {isChecking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />} Hromadná kontrola ISIR
+          </button>
         </div>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           {[
-            [Users, 'Klienti', clients.length, 'bg-slate-50 text-slate-800 ring-slate-100'],
-            [CheckCircle2, 'Zkontrolováno', checkedCount, 'bg-sky-50 text-sky-800 ring-sky-100'],
-            [ShieldAlert, 'Nalezená řízení', foundCount, 'bg-amber-50 text-amber-800 ring-amber-100'],
-            [Scale, 'Oddlužení', debtReliefCount, 'bg-emerald-50 text-emerald-800 ring-emerald-100'],
-            [CircleAlert, 'Odškrtnuto', removedCount, 'bg-slate-100 text-slate-700 ring-slate-200']
-          ].map(([Icon, label, value, tone]) => (
-            <div key={label} className={`rounded-2xl p-4 ring-1 ${tone}`}>
-              <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide opacity-75"><Icon className="h-4 w-4" />{label}</div>
-              <div className="mt-2 text-2xl font-black">{value}</div>
+            [Users, 'Klienti', clients.length],
+            [CheckCircle2, 'Zkontrolováno', checkedCount],
+            [ShieldAlert, 'Nalezená řízení', foundCount],
+            [Scale, 'Oddlužení', debtReliefCount],
+            [CircleAlert, 'Odškrtnuto', removedCount]
+          ].map(([Icon, label, value]) => (
+            <div key={label} className="flex min-h-12 items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-slate-800">
+              <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-wide text-slate-500"><Icon className="h-3.5 w-3.5" />{label}</div>
+              <div className="text-lg font-black">{value}</div>
             </div>
           ))}
         </div>
-        <div role="status" aria-live="polite" className="mt-4 min-h-12 rounded-2xl border border-sky-100 bg-sky-50/75 px-4 py-3 text-sm leading-6 text-sky-950">
+        <div role="status" aria-live="polite" className={`mt-3 rounded-lg border px-3 py-2 text-xs leading-5 ${
+          isChecking ? 'border-sky-300 bg-sky-50 text-sky-950' : 'border-slate-200 bg-slate-50 text-slate-600'
+        }`}>
           <div className="flex items-start gap-2">
-            {isChecking || isImporting ? <Loader2 className="mt-1 h-4 w-4 shrink-0 animate-spin" /> : <Clock3 className="mt-1 h-4 w-4 shrink-0" />}
-            <span>{progressNotice || 'Kontrola nyní neběží. Uložené výsledky jsou dostupné v tabulce.'}</span>
+            {isChecking ? <Loader2 className="mt-0.5 h-4 w-4 shrink-0 animate-spin" /> : <Clock3 className="mt-0.5 h-4 w-4 shrink-0" />}
+            <span>{progressNotice || 'Kontrola nyní neběží.'}</span>
           </div>
         </div>
       </div>
 
       {newDocumentRows.length > 0 && (
-        <div className="rounded-3xl border border-amber-100 bg-amber-50/85 p-4 ring-1 ring-amber-100">
+        <div className="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-            <div className="flex shrink-0 items-center gap-2 font-black text-amber-950"><BellRing className="h-5 w-5" /> Nové dokumenty</div>
+            <div className="flex shrink-0 items-center gap-2 text-xs font-black text-slate-700"><BellRing className="h-4 w-4" /> Nové dokumenty</div>
             <div className="flex flex-wrap gap-2">
               {newDocumentRows.slice(0, 8).map((row) => (
-                <button key={row.client.id} type="button" onClick={() => openDetail(row)} className="rounded-xl bg-white px-3 py-2 text-xs font-extrabold text-amber-900 ring-1 ring-amber-200">
-                  {row.client.fullName} <span className="ml-1 rounded-md bg-amber-100 px-1.5 py-0.5">+{row.newDocuments.length}</span>
+                <button key={row.client.id} type="button" onClick={() => openDetail(row)} className="rounded-md bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-slate-700 ring-1 ring-slate-300">
+                  {row.client.fullName} <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-amber-900">+{row.newDocuments.length}</span>
                 </button>
               ))}
             </div>
@@ -829,23 +801,23 @@ export default function IsirView({
         </div>
       )}
 
-      <div className="rounded-3xl border border-white bg-white/[0.95] p-4 shadow-[0_20px_54px_-44px_rgba(15,23,42,0.5)] ring-1 ring-slate-900/[0.05]">
-        <div className="grid gap-3 lg:grid-cols-[minmax(260px,1fr)_220px_auto]">
+      <div className="rounded-xl border-2 border-slate-400 bg-white/[0.96] p-3 shadow-[0_3px_12px_rgba(15,23,42,0.12)]">
+        <div className="grid gap-2 lg:grid-cols-[minmax(260px,1fr)_220px_auto]">
           <label className="relative block">
-            <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-slate-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Hledat klienta, ID nebo spis…" className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-9 text-sm outline-none focus:border-sky-300 focus:ring-4 focus:ring-sky-100" />
-            {query && <button type="button" onClick={() => setQuery('')} className="absolute right-3 top-3 text-slate-400"><X className="h-4 w-4" /></button>}
+            <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Hledat klienta, ID nebo spis…" className="h-9 w-full rounded-md border border-slate-300 bg-white pl-10 pr-9 text-sm outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-100" />
+            {query && <button type="button" onClick={() => setQuery('')} className="absolute right-3 top-2.5 text-slate-400"><X className="h-4 w-4" /></button>}
           </label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-600">
+          <label className="flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-600">
             <Filter className="h-4 w-4" />
-            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="h-9 min-w-0 flex-1 bg-transparent font-bold outline-none">
+            <select value={sortBy} onChange={(event) => setSortBy(event.target.value)} className="h-8 min-w-0 flex-1 bg-transparent text-xs font-bold outline-none">
               <option value="client">Řadit podle klienta</option>
               <option value="status">Řadit podle stavu</option>
               <option value="case">Řadit podle spisu</option>
               <option value="checked">Řadit podle kontroly</option>
             </select>
           </label>
-          <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 text-sm font-bold text-amber-900">
+          <label className="flex cursor-pointer items-center gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 text-xs font-bold text-amber-900">
             <input type="checkbox" checked={onlyNew} onChange={(event) => setOnlyNew(event.target.checked)} /> Jen s novými dokumenty
           </label>
         </div>
@@ -857,44 +829,44 @@ export default function IsirView({
             ['removed', 'Odškrtnutá'],
             ['deadline', 'Ve lhůtě pro přihlášky']
           ].map(([key, label]) => (
-            <label key={key} className={`flex cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-xs font-bold ring-1 ${
+            <label key={key} className={`flex cursor-pointer items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px] font-bold ring-1 ${
               statusFilters.includes(key) ? 'bg-sky-50 text-sky-800 ring-sky-200' : 'bg-white text-slate-600 ring-slate-200'
             }`}><input type="checkbox" checked={statusFilters.includes(key)} onChange={() => toggleStatus(key)} />{label}</label>
           ))}
         </div>
 
-        <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-100">
+        <div className="mt-3 overflow-x-auto rounded-lg border-2 border-slate-500 shadow-sm">
           <table className="min-w-[1080px] w-full border-collapse text-left">
-            <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wide text-slate-500">
+            <thead className="bg-slate-700 text-[10px] font-bold uppercase tracking-wide text-white">
               <tr>
-                <th className="px-4 py-3">Klient</th>
-                <th className="px-4 py-3">Datum narození</th>
-                <th className="px-4 py-3">Stav insolvence</th>
-                <th className="px-4 py-3">Spisová značka</th>
-                <th className="px-4 py-3">Datum prvního podání</th>
-                <th className="px-4 py-3">Poslední událost</th>
-                <th className="px-4 py-3">Poslední kontrola</th>
-                <th className="px-4 py-3 text-right">Akce</th>
+                <th className="px-3 py-2">Klient</th>
+                <th className="px-3 py-2">Datum narození</th>
+                <th className="px-3 py-2">Stav insolvence</th>
+                <th className="px-3 py-2">Spisová značka</th>
+                <th className="px-3 py-2">Datum prvního podání</th>
+                <th className="px-3 py-2">Poslední událost</th>
+                <th className="px-3 py-2">Poslední kontrola</th>
+                <th className="px-3 py-2 text-right">Akce</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredRows.map((row) => (
-                <tr key={row.client.id} className="bg-white text-sm hover:bg-sky-50/35">
-                  <td className="px-4 py-3">
+                <tr key={row.client.id} className="bg-white text-xs hover:bg-sky-50/50">
+                  <td className="px-3 py-2">
                     <button type="button" onClick={() => openDetail(row)} className="font-black text-slate-950 hover:text-sky-700">{row.client.fullName}</button>
-                    <span className="mt-0.5 block text-xs text-slate-500">ID {row.client.clientNumber}</span>
+                    <span className="mt-0.5 block text-[10px] text-slate-500">ID {row.client.clientNumber}</span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(row.client.datumNarozeni)}</td>
-                  <td className="px-4 py-3"><span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-extrabold ring-1 ${statusTone(row.status)}`}>{row.status}</span></td>
-                  <td className="px-4 py-3 font-bold text-slate-700">{row.latestCase?.case_number || '—'}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(row.latestCase?.proceeding_started_at)}</td>
-                  <td className="max-w-[260px] px-4 py-3 text-slate-600">
+                  <td className="px-3 py-2 text-slate-600">{formatDate(row.client.datumNarozeni)}</td>
+                  <td className="px-3 py-2"><span className={`inline-flex rounded-md px-2 py-0.5 text-[10px] font-extrabold ring-1 ${statusTone(row.status)}`}>{row.status}</span></td>
+                  <td className="px-3 py-2 font-bold text-slate-700">{row.latestCase?.case_number || '—'}</td>
+                  <td className="px-3 py-2 text-slate-600">{formatDate(row.latestCase?.proceeding_started_at)}</td>
+                  <td className="max-w-[260px] px-3 py-2 text-slate-600">
                     <span className="line-clamp-2">{row.latestCase?.last_event_at ? `${formatDate(row.latestCase.last_event_at)} – ` : ''}{row.latestCase?.last_event_title || '—'}</span>
                     {row.newDocuments.length > 0 && <span className="mt-1 inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-extrabold uppercase text-amber-800 ring-1 ring-amber-200">+{row.newDocuments.length} nové</span>}
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(row.lastChecked, true)}</td>
-                  <td className="px-4 py-3 text-right">
-                    <button type="button" onClick={() => openDetail(row)} className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs font-extrabold text-sky-800">
+                  <td className="px-3 py-2 text-slate-600">{formatDate(row.lastChecked, true)}</td>
+                  <td className="px-3 py-2 text-right">
+                    <button type="button" onClick={() => openDetail(row)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-[11px] font-extrabold text-slate-700 hover:bg-slate-50">
                       Detail <ChevronRight className="h-3.5 w-3.5" />
                     </button>
                   </td>
